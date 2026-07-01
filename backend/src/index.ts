@@ -45,7 +45,7 @@ const limiter = rateLimit({
 app.use(limiter);
 
 // Health check
-app.get('/health', async (_req, res) => {
+app.get('/health', async (_req: express.Request, res: express.Response) => {
   try {
     await pool.query('SELECT 1');
     res.json({ status: 'ok', timestamp: new Date().toISOString() });

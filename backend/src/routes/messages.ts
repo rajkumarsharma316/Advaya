@@ -88,8 +88,8 @@ messageRouter.get('/:conversationId', async (req: Request, res: Response): Promi
 
     // Mark read-once messages as read (they'll be deleted on next fetch)
     const readOnceIds = messages.rows
-      .filter(m => m.read_once && !m.read_at && m.sender !== wallet)
-      .map(m => m.id);
+      .filter((m: any) => m.read_once && !m.read_at && m.sender !== wallet)
+      .map((m: any) => m.id);
 
     if (readOnceIds.length > 0) {
       await pool.query(
