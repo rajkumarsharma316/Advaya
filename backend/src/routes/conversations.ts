@@ -64,16 +64,18 @@ conversationRouter.get('/', async (req: Request, res: Response): Promise<void> =
   const wallet = (req as any).walletAddress as string;
   try {
     const result = await pool.query(
-      `SELECT c.*, 
-        sw.pub_key as sender_pub_key, sw.display_name as sender_name,
-        rw.pub_key as receiver_pub_key, rw.display_name as receiver_name,
-        (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id AND m.deleted_at IS NULL) as message_count,
-        (SELECT sent_at FROM messages m WHERE m.conversation_id = c.id AND m.deleted_at IS NULL ORDER BY sent_at DESC LIMIT 1) as last_message_at
-       FROM conversations c
-       JOIN wallets sw ON sw.address = c.sender
-       JOIN wallets rw ON rw.address = c.receiver
-       WHERE c.sender = $1 OR c.receiver = $1
-       ORDER BY COALESCE(last_message_at, c.created_at) DESC`,
+      `SELECT * FROM (
+        SELECT c.*, 
+          sw.pub_key as sender_pub_key, sw.display_name as sender_name,
+          rw.pub_key as receiver_pub_key, rw.display_name as receiver_name,
+          (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id AND m.deleted_at IS NULL) as message_count,
+          (SELECT sent_at FROM messages m WHERE m.conversation_id = c.id AND m.deleted_at IS NULL ORDER BY sent_at DESC LIMIT 1) as last_message_at
+        FROM conversations c
+        JOIN wallets sw ON sw.address = c.sender
+        JOIN wallets rw ON rw.address = c.receiver
+        WHERE c.sender = $1 OR c.receiver = $1
+      ) sub
+      ORDER BY COALESCE(last_message_at, created_at) DESC`,
       [wallet]
     );
     res.json({ conversations: result.rows });

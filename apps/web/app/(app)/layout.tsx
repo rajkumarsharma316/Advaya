@@ -18,10 +18,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     loading: convoLoading,
     refetch,
     addConversation,
+    updateConversation,
   } = useConversations(walletAddress);
 
   const [showNewChat, setShowNewChat] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [sidebarTab, setSidebarTab] = useState<'chats' | 'requests'>('chats');
 
   // Auth guard
   useEffect(() => {
@@ -90,28 +92,56 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
-        {/* Pending badge */}
-        {pendingRequests.length > 0 && (
-          <div
-            onClick={() => router.push('/chats')}
-            style={{
-              margin: '8px 12px 0',
-              background: 'rgba(251,191,36,0.08)',
-              border: '1px solid rgba(251,191,36,0.25)',
-              borderRadius: 10,
-              padding: '10px 14px',
-              cursor: 'pointer',
-              display: 'flex', alignItems: 'center', gap: 8,
-              fontSize: 13, color: 'var(--status-pending)',
-            }}
-          >
-            <span>📬</span>
-            <span style={{ flex: 1 }}>
-              {pendingRequests.length} pending request{pendingRequests.length !== 1 ? 's' : ''}
-            </span>
-            <span style={{ fontSize: 11 }}>→</span>
-          </div>
-        )}
+        {/* Tab bar: Chats | Requests */}
+        <div style={{
+          display: 'flex',
+          margin: '8px 12px 0',
+          background: 'var(--bg-elevated)',
+          borderRadius: 10,
+          padding: 3,
+          gap: 2,
+          border: '1px solid var(--border-subtle)',
+        }}>
+          {(['chats', 'requests'] as const).map(tab => (
+            <button
+              key={tab}
+              id={`tab-${tab}`}
+              onClick={() => {
+                setSidebarTab(tab);
+                if (tab === 'requests' && pendingRequests.length > 0) router.push('/chats');
+              }}
+              style={{
+                flex: 1,
+                padding: '6px 0',
+                borderRadius: 8,
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: 12,
+                fontWeight: sidebarTab === tab ? 600 : 400,
+                background: sidebarTab === tab ? 'var(--bg-overlay)' : 'transparent',
+                color: sidebarTab === tab ? 'var(--text-primary)' : 'var(--text-muted)',
+                transition: 'all var(--transition-fast)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                position: 'relative',
+              }}
+            >
+              {tab === 'chats' ? '💬 Chats' : '📬 Requests'}
+              {tab === 'requests' && pendingRequests.length > 0 && (
+                <span style={{
+                  background: 'var(--status-pending)',
+                  color: '#000',
+                  borderRadius: 99,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  padding: '1px 6px',
+                  lineHeight: 1.4,
+                }}>
+                  {pendingRequests.length}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
 
         {/* Conversation list */}
         <div className="sidebar-scroll">
@@ -120,6 +150,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             pendingRequests={pendingRequests}
             loading={convoLoading}
             onNewChat={() => setShowNewChat(true)}
+            activeTab={sidebarTab}
+            onTabChange={setSidebarTab}
+            onUpdate={updateConversation}
           />
         </div>
 

@@ -58,7 +58,7 @@ export function useConversations(walletAddress: string | null) {
 
   const updateConversation = useCallback((updated: Conversation) => {
     setConversations(prev =>
-      prev.map(c => c.id === updated.id ? updated : c)
+      prev.map(c => c.id === updated.id ? { ...c, ...updated } : c)
     );
   }, []);
 

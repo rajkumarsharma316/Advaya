@@ -50,6 +50,46 @@ export default function LandingPage() {
     }
   };
 
+  const handleFreighterConnect = async () => {
+    setSubmitting(true);
+    setError('');
+    try {
+      // Dynamic import avoids SSR issues
+      const freighter = await import('@stellar/freighter-api');
+
+      // Step 1: Request permission — opens the Freighter popup
+      // In Freighter API v2, requestAccess() no longer returns the key.
+      const accessResult = await freighter.requestAccess();
+      if (accessResult && (accessResult as any).error) {
+        throw new Error((accessResult as any).error);
+      }
+
+      // Step 2: Get the address (v2 renamed getPublicKey → getAddress)
+      const addrResult = await freighter.getAddress();
+      const address =
+        typeof addrResult === 'string'
+          ? addrResult
+          : (addrResult as any).address ?? (addrResult as any).publicKey ?? '';
+
+      if (!address || address.length !== 56) {
+        throw new Error('Could not retrieve public key from Freighter.');
+      }
+
+      await login(address, displayName.trim() || undefined);
+      router.push('/chats');
+    } catch (err: any) {
+      const msg: string = err?.message ?? '';
+      if (!msg || msg.toLowerCase().includes('not installed') || msg.toLowerCase().includes('not found')) {
+        setError('Freighter extension not found. Please install it from freighter.app');
+      } else {
+        setError(msg || 'Wallet connection failed.');
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+
   const fillTestWallet = () => {
     // Valid Stellar test address (exactly 56 chars starting with G)
     const test = 'GBHJJJKMOKYE4RVPZEWZTKH5FVI4PA3VL7GK2LFNUBSGBV3ESGFXUVC';
@@ -119,19 +159,89 @@ export default function LandingPage() {
         </div>
 
         {step === 'hero' ? (
-          <>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+            {/* PRIMARY: Freighter one-click connect */}
             <button
-              id="connect-wallet-btn"
+              id="connect-freighter-btn"
               className="btn btn-primary w-full"
-              style={{ justifyContent: 'center', fontSize: 15, padding: '12px 20px' }}
-              onClick={() => setStep('connect')}
+              onClick={handleFreighterConnect}
+              disabled={submitting}
+              style={{
+                justifyContent: 'center', fontSize: 15, padding: '13px 20px',
+                display: 'flex', alignItems: 'center', gap: 10,
+                background: 'linear-gradient(135deg, #5E35B1, #7C4DFF)',
+                boxShadow: '0 0 24px rgba(94,53,177,0.45)',
+              }}
             >
-              Connect Wallet
+              {submitting ? (
+                <>
+                  <span style={{
+                    width: 16, height: 16,
+                    border: '2px solid rgba(255,255,255,0.3)',
+                    borderTop: '2px solid #fff',
+                    borderRadius: '50%',
+                    display: 'inline-block',
+                    animation: 'spin 0.8s linear infinite',
+                  }} />
+                  Connecting…
+                </>
+              ) : (
+                <>
+                  {/* Freighter-style icon */}
+                  <svg width="20" height="20" viewBox="0 0 32 32" fill="none" style={{ flexShrink: 0 }}>
+                    <rect width="32" height="32" rx="8" fill="rgba(255,255,255,0.15)"/>
+                    <path d="M8 23L16 9L24 23H8Z" fill="white" opacity="0.95"/>
+                    <path d="M12 23L16 16L20 23H12Z" fill="#B39DDB"/>
+                  </svg>
+                  Connect with Freighter
+                </>
+              )}
             </button>
-            <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-muted)', marginTop: 14 }}>
-              Phase 1: Enter your Stellar public key to get started.
+
+            {/* Divider */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '2px 0' }}>
+              <div style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>or</span>
+              <div style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
+            </div>
+
+            {/* SECONDARY: Manual key entry */}
+            <button
+              id="manual-key-btn"
+              className="btn btn-ghost w-full"
+              style={{ justifyContent: 'center', fontSize: 13, padding: '10px 20px' }}
+              onClick={() => { setStep('connect'); setError(''); }}
+            >
+              Enter Public Key Manually
+            </button>
+
+            {/* Error */}
+            {error && (
+              <div style={{
+                background: 'rgba(248,113,113,0.1)',
+                border: '1px solid rgba(248,113,113,0.3)',
+                borderRadius: 8, padding: '10px 14px',
+                fontSize: 13, color: 'var(--status-danger)', marginTop: 4,
+              }}>
+                {error}
+                {error.toLowerCase().includes('freighter') && (
+                  <a
+                    href="https://freighter.app"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ display: 'block', marginTop: 6, color: 'var(--brand-secondary)', fontSize: 12 }}
+                  >
+                    → Install Freighter extension ↗
+                  </a>
+                )}
+              </div>
+            )}
+
+            <p style={{ textAlign: 'center', fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+              Your private key never leaves Freighter.
             </p>
-          </>
+          </div>
         ) : (
           <form onSubmit={handleConnect} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div>

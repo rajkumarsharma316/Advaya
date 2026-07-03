@@ -11,6 +11,9 @@ interface ConversationListProps {
   pendingRequests: Conversation[];
   loading: boolean;
   onNewChat: () => void;
+  activeTab?: 'chats' | 'requests';
+  onTabChange?: (tab: 'chats' | 'requests') => void;
+  onUpdate?: (conv: Conversation) => void;
 }
 
 function timeAgo(dateStr: string | null): string {
@@ -86,67 +89,80 @@ export function ConversationList({
   pendingRequests,
   loading,
   onNewChat,
+  activeTab = 'chats',
+  onTabChange,
 }: ConversationListProps) {
   const { walletAddress } = useAuth();
   const params = useParams();
   const activeId = params?.id ? Number(params.id) : null;
 
-  return (
-    <>
-      {/* Pending Requests Section */}
-      {pendingRequests.length > 0 && (
-        <>
-          <div className="section-label" style={{ marginTop: 8 }}>
-            📬 Requests ({pendingRequests.length})
-          </div>
-          {pendingRequests.map(convo => (
-            <ConvoItem
-              key={convo.id}
-              convo={convo}
-              isActive={activeId === convo.id}
-              myAddress={walletAddress!}
-            />
-          ))}
-          <div style={{ height: 1, background: 'var(--border-subtle)', margin: '4px 0' }} />
-        </>
-      )}
+  if (loading) {
+    return (
+      <>
+        <SkeletonItem />
+        <SkeletonItem />
+        <SkeletonItem />
+      </>
+    );
+  }
 
-      {/* Active Conversations */}
-      {conversations.length > 0 && (
-        <div className="section-label" style={{ marginTop: 8 }}>Messages</div>
-      )}
-
-      {loading ? (
-        <>
-          <SkeletonItem />
-          <SkeletonItem />
-          <SkeletonItem />
-        </>
-      ) : conversations.length === 0 && pendingRequests.length === 0 ? (
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: 12,
-          padding: '40px 20px',
-          textAlign: 'center',
-        }}>
-          <div style={{ fontSize: 40 }}>💬</div>
-          <p className="text-secondary text-sm">No conversations yet.</p>
-          <button className="btn btn-primary" onClick={onNewChat} style={{ fontSize: 13 }}>
-            Start a chat
-          </button>
+  if (activeTab === 'requests') {
+    if (pendingRequests.length === 0) {
+      return (
+        <div style={{ padding: '40px 20px', textAlign: 'center' }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>📬</div>
+          <p className="text-secondary text-sm">No pending requests.</p>
         </div>
-      ) : (
-        conversations.map(convo => (
+      );
+    }
+    return (
+      <>
+        <div className="section-label" style={{ marginTop: 8 }}>
+          📬 Requests ({pendingRequests.length})
+        </div>
+        {pendingRequests.map(convo => (
           <ConvoItem
             key={convo.id}
             convo={convo}
             isActive={activeId === convo.id}
             myAddress={walletAddress!}
           />
-        ))
-      )}
+        ))}
+      </>
+    );
+  }
+
+  // Active Chats tab
+  if (conversations.length === 0) {
+    return (
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 12,
+        padding: '40px 20px',
+        textAlign: 'center',
+      }}>
+        <div style={{ fontSize: 40 }}>💬</div>
+        <p className="text-secondary text-sm">No conversations yet.</p>
+        <button className="btn btn-primary" onClick={onNewChat} style={{ fontSize: 13 }}>
+          Start a chat
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="section-label" style={{ marginTop: 8 }}>Messages</div>
+      {conversations.map(convo => (
+        <ConvoItem
+          key={convo.id}
+          convo={convo}
+          isActive={activeId === convo.id}
+          myAddress={walletAddress!}
+        />
+      ))}
     </>
   );
 }
