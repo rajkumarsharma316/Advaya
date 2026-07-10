@@ -125,7 +125,16 @@ conversationRouter.post('/:id/approve', async (req: Request, res: Response): Pro
       res.status(404).json({ error: 'Pending conversation not found' });
       return;
     }
-    res.json({ conversation: result.rows[0] });
+
+    // Notify the sender that their request was approved
+    const conversation = result.rows[0];
+    const { io } = await import('../index');
+    const { emitToWallet } = await import('../socket/events');
+    emitToWallet(io, conversation.sender, 'conversation_approved', {
+      conversationId: Number(id),
+    });
+
+    res.json({ conversation });
   } catch (err) {
     res.status(500).json({ error: 'Failed to approve conversation' });
   }
@@ -149,5 +158,46 @@ conversationRouter.post('/:id/reject', async (req: Request, res: Response): Prom
     res.json({ conversation: result.rows[0] });
   } catch (err) {
     res.status(500).json({ error: 'Failed to reject conversation' });
+  }
+});
+
+// DELETE /api/conversations/:id
+conversationRouter.delete('/:id', async (req: Request, res: Response): Promise<void> => {
+  const wallet = (req as any).walletAddress as string;
+  const { id } = req.params;
+  try {
+    const convo = await pool.query(
+      'SELECT sender, receiver FROM conversations WHERE id = $1 AND (sender = $2 OR receiver = $2)',
+      [id, wallet]
+    );
+    if (convo.rowCount === 0) {
+      res.status(404).json({ error: 'Conversation not found or unauthorized' });
+      return;
+    }
+
+    const { sender, receiver } = convo.rows[0];
+    const otherWallet = sender === wallet ? receiver : sender;
+
+    const result = await pool.query(
+      `DELETE FROM conversations
+       WHERE id = $1 AND (sender = $2 OR receiver = $2)
+       RETURNING id`,
+      [id, wallet]
+    );
+    if (result.rowCount === 0) {
+      res.status(404).json({ error: 'Conversation not found or unauthorized' });
+      return;
+    }
+
+    // Emit event to the other participant
+    const { io } = await import('../index');
+    const { emitToWallet } = await import('../socket/events');
+    if (otherWallet) {
+      emitToWallet(io, otherWallet, 'conversation_deleted', { conversationId: Number(id) });
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete conversation' });
   }
 });

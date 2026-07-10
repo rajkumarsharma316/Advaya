@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from './context/AuthContext';
-import { generateKeyPair } from './lib/crypto';
 
 export default function LandingPage() {
   const { login, isAuthenticated, isLoading } = useAuth();
@@ -92,7 +91,7 @@ export default function LandingPage() {
 
   const fillTestWallet = () => {
     // Valid Stellar test address (exactly 56 chars starting with G)
-    const test = 'GBHJJJKMOKYE4RVPZEWZTKH5FVI4PA3VL7GK2LFNUBSGBV3ESGFXUVC';
+    const test = 'GBHJJJKMOKYE4RVPZEWZTKH5FVI4PA3VL7GK2LFNUBSGBV3ESGFXUVCE';
     setAddress(test);
     setDisplayName('Demo User');
   };
@@ -265,7 +264,7 @@ export default function LandingPage() {
               )}
               {address.length === 56 && !address.startsWith('G') && (
                 <p style={{ fontSize: 11, color: 'var(--status-danger)', marginTop: 4 }}>
-                  Stellar public keys start with 'G'
+                  Stellar public keys start with &apos;G&apos;
                 </p>
               )}
             </div>

@@ -31,23 +31,31 @@ export function MessageBubble({ message, senderPubKey, isConsecutive }: MessageB
 
   const plaintext = useMemo(() => {
     if (!keyPair) return null;
+    // Skip decryption for locally appended sent messages (they have empty ciphertext)
+    if (!message.ciphertext || !message.nonce) return null;
     try {
-      // Determine which keys to use for decryption
-      if (isSent) {
-        // We sent it — but we encrypted it for them.
-        // We can't decrypt our own NaCl box messages without knowing recipient's secret key.
-        // Show a placeholder for sent messages (or store plaintext in state when sending)
-        return '[Sent encrypted]';
-      } else {
-        // Decrypt: ciphertext was encrypted by sender for us
-        return decryptMessage(
-          message.ciphertext,
-          message.nonce,
-          senderPubKey,
-          keyPair.secretKey
-        );
+      // Decrypt: ciphertext was encrypted by sender (or by us for recipient).
+      // Since nacl.box computes the same shared secret (recipientPubKey * senderSecKey == senderPubKey * recipientSecKey),
+      // we can use the same decryptMessage function for both sent and received messages.
+      // If we sent it, `senderPubKey` here is the recipient's public key (otherPubKey).
+      const result = decryptMessage(
+        message.ciphertext,
+        message.nonce,
+        senderPubKey,
+        keyPair.secretKey
+      );
+      if (!result) {
+        console.warn('[Decrypt] Failed for message', message.id, {
+          ctLen: message.ciphertext.length,
+          nonceLen: message.nonce.length,
+          senderPubKeyLen: senderPubKey?.length,
+          myPubKey: keyPair.publicKey,
+          isSent,
+        });
       }
-    } catch {
+      return result;
+    } catch (e) {
+      console.error('[Decrypt] Error for message', message.id, e);
       return null;
     }
   }, [message, keyPair, isSent, senderPubKey]);

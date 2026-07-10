@@ -82,13 +82,13 @@ export function decryptMessage(
 /**
  * Persist keypair to localStorage (secret key never sent to server)
  */
-export function saveKeyPair(kp: KeyPair): void {
-  localStorage.setItem('advaya_keypair', JSON.stringify(kp));
+export function saveKeyPair(address: string, kp: KeyPair): void {
+  localStorage.setItem(`advaya_keypair_${address}`, JSON.stringify(kp));
 }
 
-export function loadKeyPair(): KeyPair | null {
+export function loadKeyPair(address: string): KeyPair | null {
   try {
-    const raw = localStorage.getItem('advaya_keypair');
+    const raw = localStorage.getItem(`advaya_keypair_${address}`);
     if (!raw) return null;
     return JSON.parse(raw) as KeyPair;
   } catch {
@@ -96,8 +96,10 @@ export function loadKeyPair(): KeyPair | null {
   }
 }
 
-export function clearKeyPair(): void {
-  localStorage.removeItem('advaya_keypair');
+export function clearKeyPair(_address: string): void {
+  // We intentionally do not remove the keypair here so that users 
+  // can log back into their account without losing message history.
+  // localStorage.removeItem(`advaya_keypair_${_address}`);
 }
 
 /**

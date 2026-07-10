@@ -114,6 +114,10 @@ export async function rejectConversation(id: number, walletAddress: string): Pro
   return request(`/api/conversations/${id}/reject`, { method: 'POST' }, walletAddress);
 }
 
+export async function deleteConversation(id: number, walletAddress: string): Promise<{ success: boolean }> {
+  return request(`/api/conversations/${id}`, { method: 'DELETE' }, walletAddress);
+}
+
 // ─── Messages ─────────────────────────────────────────────────────────────────
 
 export interface Message {

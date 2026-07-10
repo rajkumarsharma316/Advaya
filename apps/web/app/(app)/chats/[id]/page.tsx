@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '../../../context/AuthContext';
 import { useMessages } from '../../../hooks/useMessages';
 import { useSocket } from '../../../hooks/useSocket';
-import { getConversation, Conversation, Message } from '../../../lib/api';
+import { getConversation, Conversation, Message, deleteConversation } from '../../../lib/api';
 import { MessageBubble, DateDivider, TypingIndicator, SentMessageBubble } from '../../../components/MessageBubble';
 import { ChatInput } from '../../../components/ChatInput';
 import { shortAddress, getAvatarText, getAvatarGradient, decryptMessage } from '../../../lib/crypto';
@@ -75,10 +75,48 @@ export default function ChatRoomPage() {
     return off;
   }, [on, walletAddress]);
 
+  // Listen for conversation deletion
+  useEffect(() => {
+    const off = on<{ conversationId: number }>('conversation_deleted', (data) => {
+      if (data.conversationId === conversationId) {
+        alert('This conversation was deleted by the other participant.');
+        router.push('/chats');
+      }
+    });
+    return off;
+  }, [on, conversationId, router]);
+
+  // Listen for conversation approval (other side accepted)
+  useEffect(() => {
+    const off = on<{ conversationId: number }>('conversation_approved', (data) => {
+      if (data.conversationId === conversationId && walletAddress) {
+        // Re-fetch conversation to update status
+        getConversation(conversationId, walletAddress)
+          .then(({ conversation }) => setConversation(conversation))
+          .catch(() => {});
+      }
+    });
+    return off;
+  }, [on, conversationId, walletAddress]);
+
   // Auto-scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
+
+  const handleDeleteChat = useCallback(async () => {
+    if (!conversationId || !walletAddress) return;
+    const confirmed = window.confirm("Are you sure you want to delete this conversation? This will delete all messages for both participants.");
+    if (confirmed) {
+      try {
+        await deleteConversation(conversationId, walletAddress);
+        router.push('/chats');
+      } catch (err) {
+        console.error('Failed to delete conversation', err);
+        alert('Failed to delete conversation');
+      }
+    }
+  }, [conversationId, walletAddress, router]);
 
   const handleMessageSent = useCallback((
     plaintext: string,
@@ -186,6 +224,23 @@ export default function ChatRoomPage() {
             <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
           </svg>
           {shortAddress(otherAddress)}
+        </button>
+
+        {/* Delete chat */}
+        <button
+          onClick={handleDeleteChat}
+          title="Delete Conversation"
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: 'var(--status-danger)', display: 'flex', padding: 4,
+            marginLeft: 4, opacity: 0.8,
+          }}
+          onMouseOver={e => (e.currentTarget as HTMLElement).style.opacity = '1'}
+          onMouseOut={e => (e.currentTarget as HTMLElement).style.opacity = '0.8'}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          </svg>
         </button>
       </div>
 

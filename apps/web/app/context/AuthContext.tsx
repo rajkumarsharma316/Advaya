@@ -34,7 +34,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const savedWallet = localStorage.getItem(WALLET_KEY);
     const savedName = localStorage.getItem(DISPLAY_NAME_KEY);
-    const savedKeyPair = loadKeyPair();
+    // We only load keypair if we have a wallet
+    let savedKeyPair = null;
+    if (savedWallet) {
+      savedKeyPair = loadKeyPair(savedWallet);
+    }
 
     if (savedWallet && savedKeyPair) {
       setState({
@@ -49,12 +53,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = useCallback(async (address: string, displayName?: string) => {
+    // Clear legacy generic keypair to prevent cross-contamination between wallets
+    localStorage.removeItem('advaya_keypair');
+
     // Generate or reuse keypair
-    let kp = loadKeyPair();
+    let kp = loadKeyPair(address);
+    const isExisting = !!kp;
     if (!kp) {
       kp = generateKeyPair();
     }
-    saveKeyPair(kp);
+    saveKeyPair(address, kp);
+
+    console.log(`[Auth] Login: ${address.slice(0, 8)}... | keypair: ${isExisting ? 'reused' : 'NEW'} | pubKey: ${kp.publicKey.slice(0, 16)}...`);
 
     // Register with backend (upserts)
     await registerWallet(address, kp.publicKey, displayName);
@@ -71,7 +81,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
-    clearKeyPair();
+    if (state.walletAddress) {
+      clearKeyPair(state.walletAddress);
+    }
     localStorage.removeItem(WALLET_KEY);
     localStorage.removeItem(DISPLAY_NAME_KEY);
     setState({ walletAddress: null, keyPair: null, displayName: null, isLoading: false });

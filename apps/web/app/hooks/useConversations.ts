@@ -56,6 +56,22 @@ export function useConversations(walletAddress: string | null) {
     return off;
   }, [on, fetchConversations]);
 
+  // Real-time: conversation deleted
+  useEffect(() => {
+    const off = on<{ conversationId: number }>('conversation_deleted', () => {
+      fetchConversations();
+    });
+    return off;
+  }, [on, fetchConversations]);
+
+  // Real-time: conversation approved (other side accepted our request)
+  useEffect(() => {
+    const off = on<{ conversationId: number }>('conversation_approved', () => {
+      fetchConversations();
+    });
+    return off;
+  }, [on, fetchConversations]);
+
   const updateConversation = useCallback((updated: Conversation) => {
     setConversations(prev =>
       prev.map(c => c.id === updated.id ? { ...c, ...updated } : c)
