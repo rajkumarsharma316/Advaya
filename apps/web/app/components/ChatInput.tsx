@@ -6,8 +6,9 @@ import { useAuth } from '../context/AuthContext';
 
 interface FileAttachment {
   file: File;
-  preview?: string;  // Object URL for image previews
+  preview?: string;  // Object URL for image/video previews
   isImage: boolean;
+  isVideo: boolean;
 }
 
 interface ChatInputProps {
@@ -34,6 +35,10 @@ function formatFileSize(bytes: number): string {
 
 function isImageMime(mime: string): boolean {
   return mime.startsWith('image/');
+}
+
+function isVideoMime(mime: string): boolean {
+  return mime.startsWith('video/');
 }
 
 export function ChatInput({
@@ -85,9 +90,10 @@ export function ChatInput({
     }
 
     const isImage = isImageMime(file.type);
-    const att: FileAttachment = { file, isImage };
+    const isVideo = isVideoMime(file.type);
+    const att: FileAttachment = { file, isImage, isVideo };
 
-    if (isImage) {
+    if (isImage || isVideo) {
       att.preview = URL.createObjectURL(file);
     }
 
@@ -151,6 +157,8 @@ export function ChatInput({
       );
 
       // 5. Send message with file type
+      // Note: Backend schema expects 'image' or 'file' for messageType.
+      // We pass videos as 'file' and rely on mimeType in the frontend for rendering.
       const messageType = attachment.isImage ? 'image' : 'file';
       const expiresInSeconds = expiresIn ? Number(expiresIn) * 60 : undefined;
       const { message } = await sendMessage({
@@ -268,6 +276,12 @@ export function ChatInput({
               src={attachment.preview}
               alt="Preview"
               className="file-preview-thumb"
+            />
+          ) : attachment.isVideo && attachment.preview ? (
+            <video
+              src={attachment.preview}
+              className="file-preview-thumb"
+              muted
             />
           ) : (
             <div className="file-preview-icon">
@@ -399,7 +413,7 @@ export function ChatInput({
             disabled
               ? 'Conversation not approved yet'
               : attachment
-                ? `Send ${attachment.isImage ? 'image' : 'file'}: ${attachment.file.name}`
+                ? `Send ${attachment.isImage ? 'image' : attachment.isVideo ? 'video' : 'file'}: ${attachment.file.name}`
                 : 'Message… (Enter to send, Shift+Enter for newline)'
           }
           disabled={disabled || sending}
@@ -410,7 +424,7 @@ export function ChatInput({
           className="btn-send"
           onClick={handleSend}
           disabled={(!text.trim() && !attachment) || sending || disabled}
-          title={attachment ? `Send encrypted ${attachment.isImage ? 'image' : 'file'}` : 'Send encrypted message'}
+          title={attachment ? `Send encrypted ${attachment.isImage ? 'image' : attachment.isVideo ? 'video' : 'file'}` : 'Send encrypted message'}
         >
           {sending ? (
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

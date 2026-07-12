@@ -64,24 +64,26 @@ function tryParseFileMetadata(text: string): FileMetadata | null {
   }
 }
 
-// ─── Image Bubble (decrypt + render inline) ──────────────────────────────
+// ─── Media Bubble (decrypt + render inline image or video) ──────────────────────────────
 
-interface ImageBubbleContentProps {
+interface MediaBubbleContentProps {
   meta: FileMetadata;
   senderPubKey: string;
   isSent: boolean;
 }
 
-function ImageBubbleContent({ meta, senderPubKey, isSent }: ImageBubbleContentProps) {
+function MediaBubbleContent({ meta, senderPubKey, isSent }: MediaBubbleContentProps) {
   const { walletAddress, keyPair } = useAuth();
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
 
+  const isVideo = meta.mimeType.startsWith('video/');
+
   useEffect(() => {
     let cancelled = false;
-    async function loadImage() {
+    async function loadMedia() {
       if (!walletAddress || !keyPair) return;
       setLoading(true);
       setError(null);
@@ -103,12 +105,12 @@ function ImageBubbleContent({ meta, senderPubKey, isSent }: ImageBubbleContentPr
         const url = URL.createObjectURL(blob);
         setBlobUrl(url);
       } catch (err: any) {
-        if (!cancelled) setError(err.message || 'Failed to load image');
+        if (!cancelled) setError(err.message || 'Failed to load media');
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
-    loadImage();
+    loadMedia();
     return () => { cancelled = true; };
   }, [meta, walletAddress, keyPair, senderPubKey]);
 
@@ -123,7 +125,7 @@ function ImageBubbleContent({ meta, senderPubKey, isSent }: ImageBubbleContentPr
     return (
       <div className="image-bubble-loading">
         <div className="file-loading-spinner" />
-        <span>Decrypting image…</span>
+        <span>Decrypting {isVideo ? 'video' : 'image'}…</span>
       </div>
     );
   }
@@ -131,7 +133,7 @@ function ImageBubbleContent({ meta, senderPubKey, isSent }: ImageBubbleContentPr
   if (error || !blobUrl) {
     return (
       <div className="image-bubble-error">
-        <span>⚠️ {error || 'Could not load image'}</span>
+        <span>⚠️ {error || `Could not load ${isVideo ? 'video' : 'image'}`}</span>
       </div>
     );
   }
@@ -140,22 +142,28 @@ function ImageBubbleContent({ meta, senderPubKey, isSent }: ImageBubbleContentPr
     <>
       <div
         className="image-bubble-content"
-        onClick={() => setExpanded(true)}
-        role="button"
-        tabIndex={0}
+        onClick={() => !isVideo && setExpanded(true)} // Don't expand video on click, it has controls
+        role={isVideo ? undefined : "button"}
+        tabIndex={isVideo ? undefined : 0}
       >
-        <img src={blobUrl} alt={meta.fileName} className="image-bubble-img" />
-        <div className="image-bubble-overlay">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
-            <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
-          </svg>
-        </div>
+        {isVideo ? (
+          <video src={blobUrl} controls className="image-bubble-img" />
+        ) : (
+          <img src={blobUrl} alt={meta.fileName} className="image-bubble-img" />
+        )}
+        {!isVideo && (
+          <div className="image-bubble-overlay">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+              <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+            </svg>
+          </div>
+        )}
       </div>
       <div className="image-bubble-name">{meta.fileName}</div>
 
-      {/* Full-screen overlay */}
-      {expanded && (
+      {/* Full-screen overlay (only for images right now) */}
+      {expanded && !isVideo && (
         <div className="image-lightbox" onClick={() => setExpanded(false)}>
           <button className="image-lightbox-close" onClick={() => setExpanded(false)}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -294,11 +302,11 @@ export function MessageBubble({ message, senderPubKey, isConsecutive }: MessageB
       );
     }
 
-    // File/image content
+    // File/image/video content
     if (fileMeta) {
-      if (message.message_type === 'image') {
+      if (message.message_type === 'image' || fileMeta.mimeType.startsWith('video/')) {
         return (
-          <ImageBubbleContent
+          <MediaBubbleContent
             meta={fileMeta}
             senderPubKey={senderPubKey}
             isSent={isSent}
@@ -443,14 +451,17 @@ export function SentMessageBubble({ plaintext, sentAt, readOnce, expiresAt, mess
 
   const isFileMessage = messageType === 'file' || messageType === 'image';
   const meta = isFileMessage ? tryParseFileMetadata(plaintext) : null;
+  const isVideo = meta?.mimeType.startsWith('video/');
 
   return (
     <div className="message-row sent" style={{ marginTop: 8 }}>
       <div className={`bubble sent${isFileMessage ? ' has-file' : ''}`}>
         {isFileMessage && meta ? (
-          messageType === 'image' ? (
+          (messageType === 'image' || isVideo) ? (
             <div className="sent-image-placeholder">
-              <div className="file-bubble-icon" style={{ fontSize: 24 }}>🖼️</div>
+              <div className="file-bubble-icon" style={{ fontSize: 24 }}>
+                {isVideo ? '🎬' : '🖼️'}
+              </div>
               <div className="file-bubble-info">
                 <span className="file-bubble-name">{meta.fileName}</span>
                 <span className="file-bubble-size">{formatFileSize(meta.fileSize)}</span>
