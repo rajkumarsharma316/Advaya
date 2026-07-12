@@ -972,3 +972,350 @@ h1, h2, h3, h4, h5, h6 {
 .items-center { align-items: center; }
 .justify-between { justify-content: space-between; }
 .flex-1 { flex: 1; }
+
+/* ================================================
+   FILE & IMAGE MESSAGING
+   ================================================ */
+
+/* ─── File Preview Bar (above input) ───────────── */
+
+.file-preview-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-brand);
+  border-radius: 12px;
+  animation: slideUp 0.2s ease;
+}
+
+.file-preview-thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.file-preview-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--brand-secondary);
+  flex-shrink: 0;
+}
+
+.file-preview-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.file-preview-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-preview-size {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.file-preview-progress {
+  font-size: 11px;
+  color: var(--brand-secondary);
+  font-weight: 500;
+  animation: pulse-glow 1.2s infinite alternate;
+}
+
+.file-preview-remove {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: rgba(248, 113, 113, 0.1);
+  color: var(--status-danger);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.file-preview-remove:hover {
+  background: rgba(248, 113, 113, 0.2);
+}
+
+/* ─── Image Bubble ─────────────────────────────── */
+
+.bubble.has-file {
+  padding: 6px;
+  max-width: 320px;
+}
+
+.bubble.has-file .bubble-meta {
+  padding: 4px 6px 0;
+}
+
+.image-bubble-content {
+  position: relative;
+  cursor: pointer;
+  border-radius: 10px;
+  overflow: hidden;
+  line-height: 0;
+}
+
+.image-bubble-img {
+  max-width: 100%;
+  max-height: 280px;
+  border-radius: 10px;
+  object-fit: cover;
+  display: block;
+  transition: transform var(--transition-base);
+}
+
+.image-bubble-content:hover .image-bubble-img {
+  transform: scale(1.02);
+}
+
+.image-bubble-overlay {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.image-bubble-content:hover .image-bubble-overlay {
+  opacity: 1;
+}
+
+.image-bubble-name {
+  font-size: 10px;
+  color: var(--text-muted);
+  padding: 4px 6px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.image-bubble-loading,
+.image-bubble-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 20px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.image-bubble-error {
+  color: var(--status-danger);
+}
+
+/* ─── Image Lightbox ───────────────────────────── */
+
+.image-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.2s ease;
+  cursor: pointer;
+}
+
+.image-lightbox-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition-fast);
+  z-index: 10;
+}
+
+.image-lightbox-close:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.image-lightbox-img {
+  max-width: 90vw;
+  max-height: 90vh;
+  border-radius: 12px;
+  object-fit: contain;
+  cursor: default;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+/* ─── File Download Bubble ─────────────────────── */
+
+.file-bubble {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  min-width: 200px;
+}
+
+.file-bubble:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.file-bubble.sent-file {
+  background: rgba(108, 99, 255, 0.08);
+  border-color: rgba(108, 99, 255, 0.15);
+}
+
+.file-bubble-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  border-radius: 8px;
+}
+
+.file-bubble-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.file-bubble-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-bubble-size {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.file-download-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--brand-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.file-download-btn:hover:not(:disabled) {
+  background: var(--brand-primary);
+  color: white;
+  border-color: var(--brand-primary);
+}
+
+.file-download-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sent-file-badge {
+  font-size: 10px;
+  color: var(--status-online);
+  font-weight: 500;
+  flex-shrink: 0;
+  padding: 2px 8px;
+  background: rgba(34, 211, 160, 0.1);
+  border-radius: 6px;
+}
+
+.sent-image-placeholder {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  min-width: 200px;
+}
+
+/* ─── Loading Spinner ──────────────────────────── */
+
+.file-loading-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border-default);
+  border-top-color: var(--brand-secondary);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+/* ─── Animations ───────────────────────────────── */
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

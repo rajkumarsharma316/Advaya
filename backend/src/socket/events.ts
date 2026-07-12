@@ -44,6 +44,9 @@ export function initSocketHandlers(io: Server): void {
       sender: string;
       sentAt: string;
       messageType: string;
+      fileId?: string;
+      fileName?: string;
+      fileSize?: number;
     }) => {
       if (!data?.conversationId) return;
       const room = `convo:${data.conversationId}`;

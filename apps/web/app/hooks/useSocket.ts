@@ -62,6 +62,9 @@ export function useSocket(walletAddress: string | null) {
     sender: string;
     sentAt: string;
     messageType: string;
+    fileId?: string;
+    fileName?: string;
+    fileSize?: number;
   }) => {
     globalSocket?.emit('send_message', data);
   }, []);

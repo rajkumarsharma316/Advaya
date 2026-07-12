@@ -17,6 +17,8 @@ interface SentMessage {
   sentAt: string;
   expiresAt?: string | null;
   readOnce?: boolean;
+  messageType?: 'text' | 'file' | 'image';
+  fileInfo?: { fileId: string; fileName: string; fileSize: number; fileNonce: string };
 }
 
 function groupByDate(messages: Message[]): Array<{ date: string; messages: Message[] }> {
@@ -122,11 +124,13 @@ export default function ChatRoomPage() {
     plaintext: string,
     sentAt: string,
     messageId: number,
-    expiresAt?: string | null
+    expiresAt?: string | null,
+    messageType?: 'text' | 'file' | 'image',
+    fileInfo?: { fileId: string; fileName: string; fileSize: number; fileNonce: string }
   ) => {
     setSentMessages(prev => {
       const next = new Map(prev);
-      next.set(messageId, { id: messageId, plaintext, sentAt, expiresAt });
+      next.set(messageId, { id: messageId, plaintext, sentAt, expiresAt, messageType, fileInfo });
       return next;
     });
     // Also append to messages list so UI updates
@@ -136,7 +140,7 @@ export default function ChatRoomPage() {
       sender: walletAddress!,
       ciphertext: '',
       nonce: '',
-      message_type: 'text',
+      message_type: messageType || 'text',
       read_once: false,
       sent_at: sentAt,
       expires_at: expiresAt || null,
@@ -307,6 +311,8 @@ export default function ChatRoomPage() {
                       sentAt={sent.sentAt}
                       readOnce={msg.read_once}
                       expiresAt={sent.expiresAt}
+                      messageType={sent.messageType}
+                      fileInfo={sent.fileInfo}
                     />
                   );
                 }

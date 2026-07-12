@@ -10,6 +10,7 @@ import dotenv from 'dotenv';
 import { walletRouter } from './routes/wallet';
 import { conversationRouter } from './routes/conversations';
 import { messageRouter } from './routes/messages';
+import { uploadRouter } from './routes/upload';
 import { initSocketHandlers } from './socket/events';
 import { pool } from './db/pool';
 
@@ -63,6 +64,7 @@ app.get('/health', async (_req: express.Request, res: express.Response) => {
 app.use('/api/wallet', walletRouter);
 app.use('/api/conversations', conversationRouter);
 app.use('/api/messages', messageRouter);
+app.use('/api/files', uploadRouter);
 
 // Socket.IO
 initSocketHandlers(io);

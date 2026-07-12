@@ -80,6 +80,49 @@ export function decryptMessage(
 }
 
 /**
+ * Encrypt raw file bytes for a recipient using NaCl box.
+ * Returns { ciphertext (Uint8Array), nonce (base64) }.
+ */
+export function encryptFile(
+  fileBytes: Uint8Array,
+  recipientPublicKeyB64: string,
+  senderSecretKeyB64: string
+): { ciphertext: Uint8Array; nonce: string } {
+  const recipientPubKey = decodeBase64(recipientPublicKeyB64);
+  const senderSecKey = decodeBase64(senderSecretKeyB64);
+  const nonce = nacl.randomBytes(nacl.box.nonceLength);
+
+  const encrypted = nacl.box(fileBytes, nonce, recipientPubKey, senderSecKey);
+
+  return {
+    ciphertext: encrypted,
+    nonce: encodeBase64(nonce),
+  };
+}
+
+/**
+ * Decrypt raw file bytes received from a sender.
+ * Returns the decrypted Uint8Array or null on failure.
+ */
+export function decryptFile(
+  ciphertext: Uint8Array,
+  nonceB64: string,
+  senderPublicKeyB64: string,
+  recipientSecretKeyB64: string
+): Uint8Array | null {
+  try {
+    const nonce = decodeBase64(nonceB64);
+    const senderPubKey = decodeBase64(senderPublicKeyB64);
+    const recipientSecKey = decodeBase64(recipientSecretKeyB64);
+
+    const decrypted = nacl.box.open(ciphertext, nonce, senderPubKey, recipientSecKey);
+    return decrypted ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Persist keypair to localStorage (secret key never sent to server)
  */
 export function saveKeyPair(address: string, kp: KeyPair): void {

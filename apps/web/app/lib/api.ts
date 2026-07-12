@@ -131,6 +131,11 @@ export interface Message {
   sent_at: string;
   expires_at: string | null;
   read_at: string | null;
+  // File/image metadata (populated from decrypted ciphertext payload)
+  file_id?: string;
+  file_name?: string;
+  file_size?: number;
+  file_nonce?: string;
 }
 
 export async function getMessages(
@@ -164,6 +169,76 @@ export async function sendMessage(
 
 export async function deleteMessage(id: number, walletAddress: string): Promise<{ deleted: boolean }> {
   return request(`/api/messages/${id}`, { method: 'DELETE' }, walletAddress);
+}
+
+// ─── Files ──────────────────────────────────────────────────────────────────
+
+/**
+ * Upload an encrypted file blob to the server.
+ * Uses multipart/form-data (not JSON).
+ */
+export async function uploadEncryptedFile(
+  file: Blob,
+  conversationId: number,
+  originalName: string,
+  mimeType: string,
+  fileSize: number,
+  walletAddress: string
+): Promise<{ fileId: string; originalName: string; mimeType: string; fileSize: number }> {
+  const formData = new FormData();
+  formData.append('file', file, 'encrypted.enc');
+  formData.append('conversationId', String(conversationId));
+  formData.append('originalName', originalName);
+  formData.append('mimeType', mimeType);
+  formData.append('fileSize', String(fileSize));
+
+  const headers: Record<string, string> = {};
+  if (walletAddress) {
+    headers['x-wallet-address'] = walletAddress;
+  }
+  // Do NOT set Content-Type — browser will set it with boundary for FormData
+
+  const res = await fetch(`${API_BASE}/api/files/upload`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new ApiError(res.status, data?.error || `Upload failed: ${res.status}`);
+  }
+  return data;
+}
+
+/**
+ * Download the encrypted file blob from the server.
+ * Returns raw ArrayBuffer for client-side decryption.
+ */
+export async function downloadEncryptedFile(
+  fileId: string,
+  walletAddress: string
+): Promise<ArrayBuffer> {
+  const headers: Record<string, string> = {};
+  if (walletAddress) {
+    headers['x-wallet-address'] = walletAddress;
+  }
+
+  const res = await fetch(`${API_BASE}/api/files/${fileId}`, {
+    headers,
+  });
+
+  if (!res.ok) {
+    throw new ApiError(res.status, `File download failed: ${res.status}`);
+  }
+  return res.arrayBuffer();
+}
+
+/**
+ * Get the URL for downloading an encrypted file.
+ */
+export function getFileUrl(fileId: string): string {
+  return `${API_BASE}/api/files/${fileId}`;
 }
 
 export { ApiError };
