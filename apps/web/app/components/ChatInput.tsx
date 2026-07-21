@@ -1,23 +1,37 @@
 'use client';
 
+/**
+ * ChatInput — Fully Decentralized
+ * ────────────────────────────────
+ * Sending messages now works completely without a backend server:
+ *
+ *   Text:  encrypt → pin ciphertext to IPFS → publish CID on Waku
+ *   File:  encrypt → pin encrypted blob to IPFS → encrypt metadata → pin metadata → publish on Waku
+ *
+ * Replaces:
+ *   - POST /api/messages   → Waku LightPush
+ *   - POST /api/files/upload → Pinata IPFS
+ */
+
 import React, { useRef, useState, useCallback } from 'react';
-import { useSocket } from '../hooks/useSocket';
+import { useWaku } from '../hooks/useWaku';
 import { useAuth } from '../context/AuthContext';
+import { v4 as uuidv4 } from 'uuid';
 
 interface FileAttachment {
   file: File;
-  preview?: string;  // Object URL for image/video previews
+  preview?: string;
   isImage: boolean;
   isVideo: boolean;
 }
 
 interface ChatInputProps {
-  conversationId: number;
+  conversationId: string;
   recipientPubKey: string;
   onMessageSent: (
     plaintext: string,
     sentAt: string,
-    messageId: number,
+    messageId: string,
     expiresAt?: string | null,
     messageType?: 'text' | 'file' | 'image',
     fileInfo?: { fileId: string; fileName: string; fileSize: number; fileNonce: string }
@@ -33,13 +47,8 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function isImageMime(mime: string): boolean {
-  return mime.startsWith('image/');
-}
-
-function isVideoMime(mime: string): boolean {
-  return mime.startsWith('video/');
-}
+function isImageMime(mime: string): boolean { return mime.startsWith('image/'); }
+function isVideoMime(mime: string): boolean { return mime.startsWith('video/'); }
 
 export function ChatInput({
   conversationId,
@@ -57,21 +66,13 @@ export function ChatInput({
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { sendTyping, emitMessage } = useSocket(walletAddress);
+  const { sendChatMessage } = useWaku(walletAddress);
 
-  // Import encryption lazily (client-only)
   const encrypt = useCallback(async (plaintext: string) => {
     const { encryptMessage } = await import('../lib/crypto');
     if (!keyPair) throw new Error('No keypair');
     return encryptMessage(plaintext, recipientPubKey, keyPair.secretKey);
   }, [keyPair, recipientPubKey]);
-
-  const handleTyping = useCallback(() => {
-    sendTyping(conversationId, true);
-    if (typingTimer.current) clearTimeout(typingTimer.current);
-    typingTimer.current = setTimeout(() => sendTyping(conversationId, false), 2000);
-  }, [conversationId, sendTyping]);
 
   const autoResize = useCallback(() => {
     const ta = textareaRef.current;
@@ -83,40 +84,32 @@ export function ChatInput({
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     if (file.size > MAX_FILE_SIZE) {
       alert(`File too large. Maximum size is ${formatFileSize(MAX_FILE_SIZE)}.`);
       return;
     }
-
     const isImage = isImageMime(file.type);
     const isVideo = isVideoMime(file.type);
     const att: FileAttachment = { file, isImage, isVideo };
-
-    if (isImage || isVideo) {
-      att.preview = URL.createObjectURL(file);
-    }
-
+    if (isImage || isVideo) att.preview = URL.createObjectURL(file);
     setAttachment(att);
-    // Reset the input so the same file can be re-selected
     if (fileInputRef.current) fileInputRef.current.value = '';
   }, []);
 
   const removeAttachment = useCallback(() => {
-    if (attachment?.preview) {
-      URL.revokeObjectURL(attachment.preview);
-    }
+    if (attachment?.preview) URL.revokeObjectURL(attachment.preview);
     setAttachment(null);
   }, [attachment]);
 
+  // ─── Send file (fully decentralized) ─────────────────────────────────────
+
   const handleSendFile = useCallback(async () => {
     if (!attachment || sending || !walletAddress || !keyPair) return;
-
     setSending(true);
     setUploadProgress('Encrypting…');
     try {
       const { encryptFile, encryptMessage } = await import('../lib/crypto');
-      const { uploadEncryptedFile, sendMessage } = await import('../lib/api');
+      const { uploadToIpfs } = await import('../lib/ipfs');
 
       // 1. Read file as bytes
       const arrayBuffer = await attachment.file.arrayBuffer();
@@ -129,21 +122,13 @@ export function ChatInput({
         keyPair.secretKey
       );
 
-      // 3. Upload encrypted blob
-      setUploadProgress('Uploading…');
-      const encryptedBlob = new Blob([encryptedBytes]);
-      const { fileId } = await uploadEncryptedFile(
-        encryptedBlob,
-        conversationId,
-        attachment.file.name,
-        attachment.file.type,
-        attachment.file.size,
-        walletAddress
-      );
+      // 3. Upload encrypted blob to IPFS (+ Pinata pin)
+      setUploadProgress('Uploading to IPFS…');
+      const fileCid = await uploadToIpfs(encryptedBytes);
 
-      // 4. Create metadata payload and encrypt it as the message ciphertext
+      // 4. Build + encrypt metadata payload
       const metadataPayload = JSON.stringify({
-        fileId,
+        fileId: fileCid,
         fileName: attachment.file.name,
         fileSize: attachment.file.size,
         mimeType: attachment.file.type,
@@ -156,42 +141,45 @@ export function ChatInput({
         keyPair.secretKey
       );
 
-      // 5. Send message with file type
-      // Note: Backend schema expects 'image' or 'file' for messageType.
-      // We pass videos as 'file' and rely on mimeType in the frontend for rendering.
-      const messageType = attachment.isImage ? 'image' : 'file';
-      const expiresInSeconds = expiresIn ? Number(expiresIn) * 60 : undefined;
-      const { message } = await sendMessage({
+      // 5. Pin encrypted metadata to IPFS
+      setUploadProgress('Pinning metadata…');
+      const metaBytes = new TextEncoder().encode(ciphertext);
+      const messageCid = await uploadToIpfs(metaBytes);
+
+      // 6. Build Waku message (no backend needed)
+      const messageId = uuidv4();
+      const sentAt = new Date().toISOString();
+      const expiresAt = expiresIn
+        ? new Date(Date.now() + Number(expiresIn) * 60 * 1000).toISOString()
+        : null;
+      const messageType: 'text' | 'file' | 'image' = attachment.isImage ? 'image' : 'file';
+
+      // 7. Publish to Waku P2P network
+      await sendChatMessage({
+        type: 'chat_message',
         conversationId,
-        ciphertext,
+        messageId,
+        ciphertext: 'IPFS_BLOB',
         nonce,
+        ipfsCid: messageCid,
+        sender: walletAddress,
+        sentAt,
         messageType,
         readOnce,
-        expiresInSeconds,
-      }, walletAddress);
-
-      // 6. Emit via socket for real-time delivery
-      emitMessage({
-        conversationId,
-        messageId: message.id,
-        ciphertext,
-        nonce,
-        sender: walletAddress,
-        sentAt: message.sent_at,
-        messageType,
-        fileId,
+        expiresAt,
+        fileId: fileCid,
         fileName: attachment.file.name,
         fileSize: attachment.file.size,
       });
 
-      // 7. Notify parent
+      // 8. Notify parent component
       onMessageSent(
         metadataPayload,
-        message.sent_at,
-        message.id,
-        message.expires_at,
-        messageType as 'file' | 'image',
-        { fileId, fileName: attachment.file.name, fileSize: attachment.file.size, fileNonce }
+        sentAt,
+        messageId,
+        expiresAt,
+        messageType,
+        { fileId: fileCid, fileName: attachment.file.name, fileSize: attachment.file.size, fileNonce }
       );
 
       removeAttachment();
@@ -204,10 +192,11 @@ export function ChatInput({
       setSending(false);
       setUploadProgress(null);
     }
-  }, [attachment, sending, walletAddress, keyPair, recipientPubKey, conversationId, readOnce, expiresIn, emitMessage, onMessageSent, removeAttachment]);
+  }, [attachment, sending, walletAddress, keyPair, recipientPubKey, conversationId, readOnce, expiresIn, sendChatMessage, onMessageSent, removeAttachment]);
+
+  // ─── Send text message (fully decentralized) ──────────────────────────────
 
   const handleSend = useCallback(async () => {
-    // If there's an attachment, send the file
     if (attachment) {
       await handleSendFile();
       return;
@@ -218,46 +207,51 @@ export function ChatInput({
 
     setSending(true);
     try {
+      const { uploadToIpfs } = await import('../lib/ipfs');
+
+      // 1. Encrypt the message
       const { ciphertext, nonce } = await encrypt(trimmed);
 
-      // Send to backend via REST
-      const { sendMessage } = await import('../lib/api');
-      const expiresInSeconds = expiresIn ? Number(expiresIn) * 60 : undefined;
-      const { message } = await sendMessage({
+      // 2. Pin ciphertext to IPFS
+      const textBytes = new TextEncoder().encode(ciphertext);
+      const messageCid = await uploadToIpfs(textBytes);
+
+      // 3. Build Waku message
+      const messageId = uuidv4();
+      const sentAt = new Date().toISOString();
+      const expiresAt = expiresIn
+        ? new Date(Date.now() + Number(expiresIn) * 60 * 1000).toISOString()
+        : null;
+
+      // 4. Publish to Waku — no backend needed
+      await sendChatMessage({
+        type: 'chat_message',
         conversationId,
-        ciphertext,
+        messageId,
+        ciphertext: 'IPFS_BLOB',
         nonce,
+        ipfsCid: messageCid,
+        sender: walletAddress,
+        sentAt,
         messageType: 'text',
         readOnce,
-        expiresInSeconds,
-      }, walletAddress);
-
-      // Emit via socket for real-time delivery
-      emitMessage({
-        conversationId,
-        messageId: message.id,
-        ciphertext,
-        nonce,
-        sender: walletAddress,
-        sentAt: message.sent_at,
-        messageType: 'text',
+        expiresAt,
       });
 
-      // Notify parent with plaintext so we can show it
-      onMessageSent(trimmed, message.sent_at, message.id, message.expires_at);
+      // 5. Notify parent with plaintext for immediate display
+      onMessageSent(trimmed, sentAt, messageId, expiresAt);
 
       setText('');
-      if (textareaRef.current) {
-        textareaRef.current.style.height = 'auto';
-      }
+      if (textareaRef.current) textareaRef.current.style.height = 'auto';
       setReadOnce(false);
       setExpiresIn('');
     } catch (err: any) {
       console.error('Send failed:', err);
+      alert('Failed to send message: ' + (err.message || 'Unknown error'));
     } finally {
       setSending(false);
     }
-  }, [text, attachment, sending, walletAddress, keyPair, encrypt, conversationId, readOnce, expiresIn, emitMessage, onMessageSent, handleSendFile]);
+  }, [text, attachment, sending, walletAddress, keyPair, encrypt, conversationId, readOnce, expiresIn, sendChatMessage, onMessageSent, handleSendFile]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -272,17 +266,9 @@ export function ChatInput({
       {attachment && (
         <div className="file-preview-bar">
           {attachment.isImage && attachment.preview ? (
-            <img
-              src={attachment.preview}
-              alt="Preview"
-              className="file-preview-thumb"
-            />
+            <img src={attachment.preview} alt="Preview" className="file-preview-thumb" />
           ) : attachment.isVideo && attachment.preview ? (
-            <video
-              src={attachment.preview}
-              className="file-preview-thumb"
-              muted
-            />
+            <video src={attachment.preview} className="file-preview-thumb" muted />
           ) : (
             <div className="file-preview-icon">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -298,11 +284,7 @@ export function ChatInput({
           {uploadProgress ? (
             <span className="file-preview-progress">{uploadProgress}</span>
           ) : (
-            <button
-              className="file-preview-remove"
-              onClick={removeAttachment}
-              title="Remove attachment"
-            >
+            <button className="file-preview-remove" onClick={removeAttachment} title="Remove attachment">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
               </svg>
@@ -313,18 +295,8 @@ export function ChatInput({
 
       {/* Message options */}
       {showOptions && (
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 16,
-          padding: '8px 0 12px',
-          borderTop: '1px solid var(--border-subtle)',
-          marginBottom: 12,
-        }}>
-          <label style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer',
-          }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '8px 0 12px', borderTop: '1px solid var(--border-subtle)', marginBottom: 12 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer' }}>
             <input
               type="checkbox"
               checked={readOnce}
@@ -333,22 +305,12 @@ export function ChatInput({
             />
             👁 Read once
           </label>
-          <label style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            fontSize: 12, color: 'var(--text-secondary)',
-          }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
             ⏱ Expires in:
             <select
               value={expiresIn}
               onChange={e => setExpiresIn(e.target.value === '' ? '' : Number(e.target.value))}
-              style={{
-                background: 'var(--bg-elevated)',
-                border: '1px solid var(--border-default)',
-                borderRadius: 6,
-                color: 'var(--text-primary)',
-                padding: '2px 6px',
-                fontSize: 12,
-              }}
+              style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 6, color: 'var(--text-primary)', padding: '2px 6px', fontSize: 12 }}
             >
               <option value="">Never</option>
               <option value={1}>1 min</option>
@@ -367,11 +329,7 @@ export function ChatInput({
           className="btn-icon btn-ghost btn"
           onClick={() => setShowOptions(s => !s)}
           title="Message options"
-          style={{
-            color: showOptions ? 'var(--brand-secondary)' : 'var(--text-muted)',
-            background: showOptions ? 'rgba(108,99,255,0.1)' : 'transparent',
-            border: '1px solid var(--border-subtle)',
-          }}
+          style={{ color: showOptions ? 'var(--brand-secondary)' : 'var(--text-muted)', background: showOptions ? 'rgba(108,99,255,0.1)' : 'transparent', border: '1px solid var(--border-subtle)' }}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/>
@@ -384,11 +342,7 @@ export function ChatInput({
           onClick={() => fileInputRef.current?.click()}
           title="Attach file or image"
           disabled={disabled || sending}
-          style={{
-            color: attachment ? 'var(--brand-secondary)' : 'var(--text-muted)',
-            background: attachment ? 'rgba(108,99,255,0.1)' : 'transparent',
-            border: '1px solid var(--border-subtle)',
-          }}
+          style={{ color: attachment ? 'var(--brand-secondary)' : 'var(--text-muted)', background: attachment ? 'rgba(108,99,255,0.1)' : 'transparent', border: '1px solid var(--border-subtle)' }}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
@@ -407,7 +361,7 @@ export function ChatInput({
           ref={textareaRef}
           className="chat-textarea"
           value={text}
-          onChange={e => { setText(e.target.value); autoResize(); handleTyping(); }}
+          onChange={e => { setText(e.target.value); autoResize(); }}
           onKeyDown={handleKeyDown}
           placeholder={
             disabled
@@ -448,17 +402,12 @@ export function ChatInput({
         </button>
       </div>
 
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 5,
-        marginTop: 6,
-      }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 6 }}>
         <span className="enc-badge" style={{ fontSize: 10 }}>
           <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
           </svg>
-          End-to-end encrypted
+          End-to-end encrypted · Stored on IPFS · Sent via Waku P2P
         </span>
         {(readOnce || expiresIn) && (
           <span style={{ fontSize: 10, color: 'var(--status-pending)' }}>

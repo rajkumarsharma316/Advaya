@@ -1,8 +1,20 @@
 'use client';
 
+/**
+ * RequestCard — Fully Decentralized
+ * ───────────────────────────────────
+ * Approve/reject via Soroban contract + Waku notification to requester.
+ * No backend server call.
+ */
+
 import React, { useState } from 'react';
-import { Conversation, approveConversation, rejectConversation } from '../lib/api';
+import {
+  approveConversation,
+  rejectConversation,
+  type Conversation,
+} from '../lib/stellar';
 import { useAuth } from '../context/AuthContext';
+import { useWaku, type WakuConversationUpdate } from '../hooks/useWaku';
 import { shortAddress, getAvatarText, getAvatarGradient } from '../lib/crypto';
 
 interface RequestCardProps {
@@ -11,7 +23,8 @@ interface RequestCardProps {
 }
 
 export function RequestCard({ conversation, onUpdate }: RequestCardProps) {
-  const { walletAddress } = useAuth();
+  const { walletAddress, keyPair, displayName } = useAuth();
+  const { sendSystemEvent } = useWaku(walletAddress);
   const [loading, setLoading] = useState<'approve' | 'reject' | null>(null);
 
   const senderName = conversation.sender_name || shortAddress(conversation.sender);
@@ -19,14 +32,28 @@ export function RequestCard({ conversation, onUpdate }: RequestCardProps) {
   const gradient = getAvatarGradient(conversation.sender);
 
   const handle = async (action: 'approve' | 'reject') => {
-    if (!walletAddress || loading) return;
+    if (!walletAddress || !keyPair || loading) return;
     setLoading(action);
     try {
       const fn = action === 'approve' ? approveConversation : rejectConversation;
-      const { conversation: updated } = await fn(conversation.id, walletAddress);
+      const updated = await fn(conversation.id, walletAddress);
       onUpdate(updated);
+
+      // Notify the sender via Waku
+      const eventType = action === 'approve' ? 'conversation_approved' : 'conversation_rejected';
+      const wakuUpdate: WakuConversationUpdate = {
+        type: eventType,
+        conversationId: conversation.id,
+        actorAddress: walletAddress,
+        actorPubKey: keyPair.publicKey,
+        actorName: displayName,
+        updatedAt: new Date().toISOString(),
+      };
+
+      await sendSystemEvent(conversation.sender, wakuUpdate);
+      console.log(`[Waku] ${eventType} sent to`, conversation.sender.slice(0, 8));
     } catch (err) {
-      console.error(err);
+      console.error('[RequestCard] Action failed:', err);
     } finally {
       setLoading(null);
     }
@@ -41,11 +68,7 @@ export function RequestCard({ conversation, onUpdate }: RequestCardProps) {
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 600, fontSize: 14 }}>{senderName}</div>
-          <div style={{
-            fontSize: 11, color: 'var(--text-muted)',
-            fontFamily: 'monospace', whiteSpace: 'nowrap',
-            overflow: 'hidden', textOverflow: 'ellipsis',
-          }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {conversation.sender}
           </div>
         </div>
@@ -54,15 +77,7 @@ export function RequestCard({ conversation, onUpdate }: RequestCardProps) {
 
       {/* Note */}
       {conversation.request_note && (
-        <div style={{
-          background: 'var(--bg-overlay)',
-          border: '1px solid var(--border-subtle)',
-          borderRadius: 10,
-          padding: '10px 14px',
-          fontSize: 13,
-          color: 'var(--text-secondary)',
-          fontStyle: 'italic',
-        }}>
+        <div style={{ background: 'var(--bg-overlay)', border: '1px solid var(--border-subtle)', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: 'var(--text-secondary)', fontStyle: 'italic' }}>
           "{conversation.request_note}"
         </div>
       )}

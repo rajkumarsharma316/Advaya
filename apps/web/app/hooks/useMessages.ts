@@ -1,86 +1,149 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { getMessages, Message } from '../lib/api';
-import { useSocket } from './useSocket';
+/**
+ * useMessages — Fully Decentralized
+ * ───────────────────────────────────
+ * Replaces GET /api/messages/:conversationId with:
+ *   - Waku Store queries (historical messages, ~30 day retention)
+ *   - Waku Filter subscriptions (real-time incoming messages)
+ *
+ * Message format on Waku:
+ *   type: 'chat_message'
+ *   ciphertext: 'IPFS_BLOB' (content stored on IPFS)
+ *   ipfsCid: '<CID>'
+ *   nonce: '<base64>'
+ *   sender: '<walletAddress>'
+ *   sentAt: '<ISO timestamp>'
+ *   messageType: 'text' | 'file' | 'image'
+ */
 
-interface RealTimeMessage {
-  conversationId: number;
-  messageId: number;
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useWaku, type WakuChatMessage } from './useWaku';
+
+// ─── Message type exposed to the rest of the app ─────────────────────────────
+
+export interface Message {
+  id: string;            // UUID from Waku payload (no server-generated IDs)
+  conversation_id: string;
+  sender: string;
   ciphertext: string;
   nonce: string;
-  sender: string;
-  sentAt: string;
-  messageType: string;
+  message_type: 'text' | 'file' | 'image';
+  read_once: boolean;
+  sent_at: string;
+  expires_at: string | null;
+  read_at: string | null;
+  ipfs_cid?: string;
+  // File metadata (populated when message_type === 'file' | 'image')
+  file_id?: string;
+  file_name?: string;
+  file_size?: number;
+  file_nonce?: string;
 }
 
+function wakuMsgToMessage(w: WakuChatMessage): Message {
+  return {
+    id: w.messageId,
+    conversation_id: w.conversationId,
+    sender: w.sender,
+    ciphertext: w.ciphertext,
+    nonce: w.nonce,
+    message_type: w.messageType,
+    read_once: w.readOnce ?? false,
+    sent_at: w.sentAt,
+    expires_at: w.expiresAt ?? null,
+    read_at: null,
+    ipfs_cid: w.ipfsCid,
+    file_id: w.fileId,
+    file_name: w.fileName,
+    file_size: w.fileSize,
+  };
+}
+
+// ─── Hook ────────────────────────────────────────────────────────────────────
+
 export function useMessages(
-  conversationId: number | null,
+  conversationId: string | null,
   walletAddress: string | null
 ) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { joinConversation, leaveConversation, on } = useSocket(walletAddress);
   const mountedRef = useRef(true);
+  const {
+    subscribeToChatMessages,
+    queryMessageHistory,
+    isReady: wakuReady,
+  } = useWaku(walletAddress);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => { mountedRef.current = false; };
   }, []);
 
+  // ─── Load history from Waku Store ─────────────────────────────────────────
+
   const fetchMessages = useCallback(async () => {
     if (!conversationId || !walletAddress) return;
     setLoading(true);
     setError(null);
     try {
-      const { messages } = await getMessages(conversationId, walletAddress);
-      if (mountedRef.current) setMessages(messages);
+      const history = await queryMessageHistory(conversationId);
+      const mapped = history.map(wakuMsgToMessage);
+
+      // Filter out expired messages
+      const now = Date.now();
+      const valid = mapped.filter(m =>
+        !m.expires_at || new Date(m.expires_at).getTime() > now
+      );
+
+      if (mountedRef.current) setMessages(valid);
     } catch (err: any) {
-      if (mountedRef.current) setError(err.message);
+      if (mountedRef.current) setError(err.message || 'Failed to load messages');
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, [conversationId, walletAddress]);
+  }, [conversationId, walletAddress, queryMessageHistory]);
 
-  // Fetch + join room when conversation changes
+  // Load on mount + when conversation changes
   useEffect(() => {
     if (!conversationId) {
       setMessages([]);
       return;
     }
-    fetchMessages();
-    joinConversation(conversationId);
-    return () => { leaveConversation(conversationId); };
-  }, [conversationId, fetchMessages, joinConversation, leaveConversation]);
+    if (wakuReady) {
+      fetchMessages();
+    }
+  }, [conversationId, wakuReady, fetchMessages]);
 
-  // Real-time incoming messages
+  // ─── Live subscription for real-time messages ──────────────────────────────
+
   useEffect(() => {
-    const off = on<RealTimeMessage>('new_message', (data) => {
-      if (data.conversationId !== conversationId) return;
-      // Build a partial Message object from socket data
-      const msg: Message = {
-        id: data.messageId,
-        conversation_id: data.conversationId,
-        sender: data.sender,
-        ciphertext: data.ciphertext,
-        nonce: data.nonce,
-        message_type: (data.messageType as Message['message_type']) || 'text',
-        read_once: false,
-        sent_at: data.sentAt,
-        expires_at: null,
-        read_at: null,
-      };
-      if (mountedRef.current) {
-        setMessages(prev => {
-          // Avoid duplicates
-          if (prev.find(m => m.id === msg.id)) return prev;
-          return [...prev, msg];
-        });
-      }
+    if (!conversationId || !wakuReady) return;
+
+    let unsubFn: (() => void) | null = null;
+
+    subscribeToChatMessages(conversationId, (wakuMsg) => {
+      if (!mountedRef.current) return;
+
+      // Ignore expired
+      if (wakuMsg.expiresAt && new Date(wakuMsg.expiresAt).getTime() <= Date.now()) return;
+
+      const msg = wakuMsgToMessage(wakuMsg);
+      setMessages(prev => {
+        if (prev.find(m => m.id === msg.id)) return prev;
+        return [...prev, msg];
+      });
+    }).then(unsub => {
+      unsubFn = unsub;
     });
-    return off;
-  }, [on, conversationId]);
+
+    return () => {
+      if (unsubFn) unsubFn();
+    };
+  }, [conversationId, wakuReady, subscribeToChatMessages]);
+
+  // ─── Helper to optimistically add a sent message ───────────────────────────
 
   const appendMessage = useCallback((msg: Message) => {
     setMessages(prev => {

@@ -1,3 +1,20 @@
+/**
+ * @deprecated — ADVAYA BACKEND IS DEPRECATED
+ * ─────────────────────────────────────────────────────────────────────────────
+ * The Advaya application has been fully decentralized.
+ * This backend server is NO LONGER NEEDED and is kept for reference only.
+ *
+ * What replaced it:
+ *   /api/wallet/*        → Soroban smart contract (apps/web/app/lib/stellar.ts)
+ *   /api/conversations/* → Soroban smart contract (apps/web/app/lib/stellar.ts)
+ *   /api/messages/*      → Waku P2P network (apps/web/app/hooks/useWaku.ts)
+ *   /api/files/*         → IPFS + Pinata (apps/web/app/lib/ipfs.ts)
+ *   socket.io events     → Waku P2P pubsub (apps/web/app/hooks/useWaku.ts)
+ *
+ * To run the app: cd apps/web && npm run dev
+ * No backend server or database required.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
 import express from 'express';
 import http from 'http';
 import { Server as SocketServer } from 'socket.io';

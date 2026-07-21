@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
-import { Message, downloadEncryptedFile } from '../lib/api';
+import { type Message } from '../hooks/useMessages';
 import { decryptMessage, decryptFile } from '../lib/crypto';
 import { useAuth } from '../context/AuthContext';
 
@@ -88,8 +88,9 @@ function MediaBubbleContent({ meta, senderPubKey, isSent }: MediaBubbleContentPr
       setLoading(true);
       setError(null);
       try {
-        const encryptedBuffer = await downloadEncryptedFile(meta.fileId, walletAddress);
-        const encryptedBytes = new Uint8Array(encryptedBuffer);
+        const { downloadFromIpfs } = await import('../lib/ipfs');
+        // We stored the fileCID in meta.fileId for backwards compatibility
+        const encryptedBytes = await downloadFromIpfs(meta.fileId);
         const decryptedBytes = decryptFile(
           encryptedBytes,
           meta.fileNonce,
@@ -101,7 +102,10 @@ function MediaBubbleContent({ meta, senderPubKey, isSent }: MediaBubbleContentPr
           return;
         }
         if (cancelled) return;
-        const blob = new Blob([decryptedBytes], { type: meta.mimeType });
+        const ab = decryptedBytes.buffer instanceof ArrayBuffer
+          ? decryptedBytes.buffer.slice(decryptedBytes.byteOffset, decryptedBytes.byteOffset + decryptedBytes.byteLength)
+          : new Uint8Array(decryptedBytes).buffer;
+        const blob = new Blob([ab], { type: meta.mimeType });
         const url = URL.createObjectURL(blob);
         setBlobUrl(url);
       } catch (err: any) {
@@ -193,8 +197,9 @@ function FileBubbleContent({ meta, senderPubKey, isSent }: FileBubbleContentProp
     if (!walletAddress || !keyPair || downloading) return;
     setDownloading(true);
     try {
-      const encryptedBuffer = await downloadEncryptedFile(meta.fileId, walletAddress);
-      const encryptedBytes = new Uint8Array(encryptedBuffer);
+      const { downloadFromIpfs } = await import('../lib/ipfs');
+      // We stored the fileCID in meta.fileId for backwards compatibility
+      const encryptedBytes = await downloadFromIpfs(meta.fileId);
       const decryptedBytes = decryptFile(
         encryptedBytes,
         meta.fileNonce,
@@ -206,7 +211,10 @@ function FileBubbleContent({ meta, senderPubKey, isSent }: FileBubbleContentProp
         return;
       }
       // Create download link
-      const blob = new Blob([decryptedBytes], { type: meta.mimeType });
+      const ab2 = decryptedBytes.buffer instanceof ArrayBuffer
+        ? decryptedBytes.buffer.slice(decryptedBytes.byteOffset, decryptedBytes.byteOffset + decryptedBytes.byteLength)
+        : new Uint8Array(decryptedBytes).buffer;
+      const blob = new Blob([ab2], { type: meta.mimeType });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -252,36 +260,54 @@ export function MessageBubble({ message, senderPubKey, isConsecutive }: MessageB
   const { walletAddress, keyPair } = useAuth();
   const isSent = message.sender === walletAddress;
 
-  const plaintext = useMemo(() => {
-    if (!keyPair) return null;
-    // Skip decryption for locally appended sent messages (they have empty ciphertext)
-    if (!message.ciphertext || !message.nonce) return null;
-    try {
-      // Decrypt: ciphertext was encrypted by sender (or by us for recipient).
-      // Since nacl.box computes the same shared secret (recipientPubKey * senderSecKey == senderPubKey * recipientSecKey),
-      // we can use the same decryptMessage function for both sent and received messages.
-      // If we sent it, `senderPubKey` here is the recipient's public key (otherPubKey).
-      const result = decryptMessage(
-        message.ciphertext,
-        message.nonce,
-        senderPubKey,
-        keyPair.secretKey
-      );
-      if (!result) {
-        console.warn('[Decrypt] Failed for message', message.id, {
-          ctLen: message.ciphertext.length,
-          nonceLen: message.nonce.length,
-          senderPubKeyLen: senderPubKey?.length,
-          myPubKey: keyPair.publicKey,
-          isSent,
-        });
+  const [plaintext, setPlaintext] = useState<string | null>(null);
+  const [isDecrypting, setIsDecrypting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAndDecrypt() {
+      if (!keyPair) return;
+      if (!message.ciphertext || !message.nonce) return;
+
+      setIsDecrypting(true);
+      try {
+        let actualCiphertext = message.ciphertext;
+
+        // Fetch from IPFS if present
+        if (message.ipfs_cid) {
+          const { downloadFromIpfs } = await import('../lib/ipfs');
+          const bytes = await downloadFromIpfs(message.ipfs_cid);
+          actualCiphertext = new TextDecoder().decode(bytes);
+        } else if (actualCiphertext === 'IPFS_BLOB') {
+          // Fallback if CID is missing but marked as IPFS
+          if (!cancelled) setPlaintext(null);
+          return;
+        }
+
+        const result = decryptMessage(
+          actualCiphertext,
+          message.nonce,
+          senderPubKey,
+          keyPair.secretKey
+        );
+
+        if (!result) {
+          console.warn('[Decrypt] Failed for message', message.id);
+        }
+        
+        if (!cancelled) setPlaintext(result);
+      } catch (e) {
+        console.error('[Decrypt/IPFS] Error for message', message.id, e);
+        if (!cancelled) setPlaintext(null);
+      } finally {
+        if (!cancelled) setIsDecrypting(false);
       }
-      return result;
-    } catch (e) {
-      console.error('[Decrypt] Error for message', message.id, e);
-      return null;
     }
-  }, [message, keyPair, isSent, senderPubKey]);
+
+    loadAndDecrypt();
+    return () => { cancelled = true; };
+  }, [message, keyPair, senderPubKey]);
 
   // Check if this is a file/image message
   const fileMeta = useMemo(() => {
@@ -294,10 +320,18 @@ export function MessageBubble({ message, senderPubKey, isConsecutive }: MessageB
   }, [plaintext, message.message_type]);
 
   const renderContent = () => {
+    if (isDecrypting) {
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, opacity: 0.7, fontSize: 13 }}>
+          <div className="file-loading-spinner" style={{ width: 12, height: 12 }} /> Fetching from IPFS...
+        </div>
+      );
+    }
+
     if (plaintext === null) {
       return (
         <span style={{ color: 'var(--status-danger)', fontSize: 12 }}>
-          ⚠️ Could not decrypt
+          ⚠️ Could not decrypt or load from IPFS
         </span>
       );
     }
@@ -413,8 +447,9 @@ export function SentMessageBubble({ plaintext, sentAt, readOnce, expiresAt, mess
       try {
         // We have to fetch and decrypt our own image too
         // (we encrypted it for the recipient, same shared secret works)
-        const encryptedBuffer = await downloadEncryptedFile(fileInfo!.fileId, walletAddress!);
-        const encryptedBytes = new Uint8Array(encryptedBuffer);
+        // For sent images: download from IPFS gateway
+        const { downloadFromIpfs } = await import('../lib/ipfs');
+        const encryptedBytes = await downloadFromIpfs(fileInfo!.fileId);
 
         // Use our own pubkey as "sender" since we encrypted it
         // Actually, we need the recipient's pubkey. But since NaCl shared secret is symmetric,

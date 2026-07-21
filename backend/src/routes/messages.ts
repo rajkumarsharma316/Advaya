@@ -8,8 +8,9 @@ messageRouter.use(authMiddleware);
 
 const SendMessageSchema = z.object({
   conversationId: z.number().int().positive(),
-  ciphertext: z.string().min(1),
+  ciphertext: z.string().default('IPFS_BLOB'),
   nonce: z.string().min(1),
+  ipfsCid: z.string().optional(),
   messageType: z.enum(['text', 'file', 'image']).default('text'),
   readOnce: z.boolean().default(false),
   expiresInSeconds: z.number().int().positive().optional(),
@@ -23,7 +24,7 @@ messageRouter.post('/', async (req: Request, res: Response): Promise<void> => {
     res.status(400).json({ error: parsed.error.flatten() });
     return;
   }
-  const { conversationId, ciphertext, nonce, messageType, readOnce, expiresInSeconds } = parsed.data;
+  const { conversationId, ciphertext, nonce, ipfsCid, messageType, readOnce, expiresInSeconds } = parsed.data;
 
   try {
     // Verify sender is part of this approved conversation
@@ -42,10 +43,10 @@ messageRouter.post('/', async (req: Request, res: Response): Promise<void> => {
       : null;
 
     const result = await pool.query(
-      `INSERT INTO messages (conversation_id, sender, ciphertext, nonce, message_type, read_once, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING id, conversation_id, sender, ciphertext, nonce, message_type, read_once, sent_at, expires_at`,
-      [conversationId, sender, ciphertext, nonce, messageType, readOnce, expiresAt]
+      `INSERT INTO messages (conversation_id, sender, ciphertext, nonce, ipfs_cid, message_type, read_once, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, conversation_id, sender, ciphertext, nonce, ipfs_cid, message_type, read_once, sent_at, expires_at`,
+      [conversationId, sender, ciphertext, nonce, ipfsCid, messageType, readOnce, expiresAt]
     );
 
     res.status(201).json({ message: result.rows[0] });
@@ -74,7 +75,7 @@ messageRouter.get('/:conversationId', async (req: Request, res: Response): Promi
 
     // Handle read-once: mark message as read and delete if already read
     const messages = await pool.query(
-      `SELECT id, conversation_id, sender, ciphertext, nonce, message_type, 
+      `SELECT id, conversation_id, sender, ciphertext, nonce, ipfs_cid, message_type, 
               read_once, sent_at, expires_at, read_at
        FROM messages
        WHERE conversation_id = $1 

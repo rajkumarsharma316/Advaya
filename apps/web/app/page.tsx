@@ -43,7 +43,7 @@ export default function LandingPage() {
       await login(address.trim(), displayName.trim() || undefined);
       router.push('/chats');
     } catch (err: any) {
-      setError(err.message || 'Connection failed. Is the backend running?');
+      setError(err.message || 'Connection failed. Please check your wallet address.');
     } finally {
       setSubmitting(false);
     }

@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Conversation } from '../lib/api';
+import { type Conversation } from '../lib/stellar';
 import { useAuth } from '../context/AuthContext';
 import { shortAddress, getAvatarText, getAvatarGradient } from '../lib/crypto';
 import { useRouter, useParams } from 'next/navigation';
@@ -94,7 +94,7 @@ export function ConversationList({
 }: ConversationListProps) {
   const { walletAddress } = useAuth();
   const params = useParams();
-  const activeId = params?.id ? Number(params.id) : null;
+  const activeId = params?.id ? decodeURIComponent(params.id as string) : null;
 
   if (loading) {
     return (
@@ -124,7 +124,7 @@ export function ConversationList({
           <ConvoItem
             key={convo.id}
             convo={convo}
-            isActive={activeId === convo.id}
+            isActive={activeId === String(convo.id)}
             myAddress={walletAddress!}
           />
         ))}
@@ -159,7 +159,7 @@ export function ConversationList({
         <ConvoItem
           key={convo.id}
           convo={convo}
-          isActive={activeId === convo.id}
+          isActive={activeId === String(convo.id)}
           myAddress={walletAddress!}
         />
       ))}

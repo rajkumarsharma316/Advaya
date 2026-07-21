@@ -7,7 +7,7 @@ import { useConversations } from '../hooks/useConversations';
 import { ConversationList } from '../components/ConversationList';
 import { NewConversationModal } from '../components/NewConversationModal';
 import { shortAddress, getAvatarText, getAvatarGradient } from '../lib/crypto';
-import { Conversation } from '../lib/api';
+import { type Conversation } from '../lib/stellar';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();

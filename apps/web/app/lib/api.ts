@@ -1,128 +1,38 @@
 /**
- * Advaya API Client
- * Typed HTTP client that injects the wallet address header
+ * @deprecated
+ * ─────────────────────────────────────────────────────────────────────────────
+ * This file is DEPRECATED as part of the full decentralization of Advaya.
+ *
+ * All functions in this file previously called a centralized Node.js backend.
+ * They have been replaced by:
+ *
+ *   Wallet & Conversation state → apps/web/app/lib/stellar.ts
+ *   Real-time messaging         → apps/web/app/hooks/useWaku.ts (Waku P2P)
+ *   File storage                → apps/web/app/lib/ipfs.ts (IPFS + Pinata)
+ *
+ * This file is intentionally kept as a reference during transition.
+ * Do NOT import from this file in any new or updated code.
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-
-class ApiError extends Error {
-  constructor(public status: number, message: string) {
-    super(message);
-    this.name = 'ApiError';
+class DeprecatedError extends Error {
+  constructor(fnName: string) {
+    super(
+      `[Advaya] ${fnName}() is deprecated. ` +
+      `Use stellar.ts for conversations/wallets and useWaku.ts for messaging. ` +
+      `The centralized backend has been removed.`
+    );
+    this.name = 'DeprecatedError';
   }
 }
 
-async function request<T>(
-  path: string,
-  options: RequestInit = {},
-  walletAddress?: string
-): Promise<T> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string> || {}),
-  };
+// ─── Re-exported types (for backwards compatibility during migration) ─────────
 
-  if (walletAddress) {
-    headers['x-wallet-address'] = walletAddress;
-  }
-
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers,
-  });
-
-  const data = await res.json().catch(() => ({}));
-
-  if (!res.ok) {
-    throw new ApiError(res.status, data?.error || `Request failed: ${res.status}`);
-  }
-
-  return data as T;
-}
-
-// ─── Wallet ─────────────────────────────────────────────────────────────────
-
-export interface WalletRecord {
-  address: string;
-  pub_key: string;
-  display_name: string | null;
-  registered_at: string;
-  last_seen_at?: string;
-}
-
-export async function registerWallet(
-  address: string,
-  pubKey: string,
-  displayName?: string
-): Promise<{ wallet: WalletRecord }> {
-  return request('/api/wallet/register', {
-    method: 'POST',
-    body: JSON.stringify({ address, pubKey, displayName }),
-  });
-}
-
-export async function getWallet(address: string): Promise<{ wallet: WalletRecord }> {
-  return request(`/api/wallet/${address}`);
-}
-
-export async function getMyProfile(walletAddress: string): Promise<{ wallet: WalletRecord }> {
-  return request('/api/wallet/me/profile', {}, walletAddress);
-}
-
-// ─── Conversations ────────────────────────────────────────────────────────────
-
-export interface Conversation {
-  id: number;
-  sender: string;
-  receiver: string;
-  status: 'pending' | 'approved' | 'rejected';
-  request_note: string | null;
-  created_at: string;
-  updated_at: string;
-  sender_pub_key: string;
-  sender_name: string | null;
-  receiver_pub_key: string;
-  receiver_name: string | null;
-  message_count: string;
-  last_message_at: string | null;
-}
-
-export async function getConversations(walletAddress: string): Promise<{ conversations: Conversation[] }> {
-  return request('/api/conversations', {}, walletAddress);
-}
-
-export async function getConversation(id: number, walletAddress: string): Promise<{ conversation: Conversation }> {
-  return request(`/api/conversations/${id}`, {}, walletAddress);
-}
-
-export async function createConversation(
-  receiverAddress: string,
-  requestNote: string | undefined,
-  walletAddress: string
-): Promise<{ conversation: Conversation }> {
-  return request('/api/conversations', {
-    method: 'POST',
-    body: JSON.stringify({ receiverAddress, requestNote }),
-  }, walletAddress);
-}
-
-export async function approveConversation(id: number, walletAddress: string): Promise<{ conversation: Conversation }> {
-  return request(`/api/conversations/${id}/approve`, { method: 'POST' }, walletAddress);
-}
-
-export async function rejectConversation(id: number, walletAddress: string): Promise<{ conversation: Conversation }> {
-  return request(`/api/conversations/${id}/reject`, { method: 'POST' }, walletAddress);
-}
-
-export async function deleteConversation(id: number, walletAddress: string): Promise<{ success: boolean }> {
-  return request(`/api/conversations/${id}`, { method: 'DELETE' }, walletAddress);
-}
-
-// ─── Messages ─────────────────────────────────────────────────────────────────
+export type { Conversation, WalletRecord } from './stellar';
 
 export interface Message {
-  id: number;
-  conversation_id: number;
+  id: string;
+  conversation_id: string;
   sender: string;
   ciphertext: string;
   nonce: string;
@@ -131,114 +41,89 @@ export interface Message {
   sent_at: string;
   expires_at: string | null;
   read_at: string | null;
-  // File/image metadata (populated from decrypted ciphertext payload)
+  ipfs_cid?: string;
   file_id?: string;
   file_name?: string;
   file_size?: number;
   file_nonce?: string;
 }
 
-export async function getMessages(
-  conversationId: number,
-  walletAddress: string,
-  params?: { before?: number; limit?: number }
-): Promise<{ messages: Message[] }> {
-  const qs = new URLSearchParams();
-  if (params?.before) qs.set('before', String(params.before));
-  if (params?.limit) qs.set('limit', String(params.limit));
-  const query = qs.toString() ? `?${qs}` : '';
-  return request(`/api/messages/${conversationId}${query}`, {}, walletAddress);
+// ─── Deprecated functions — all throw at runtime ─────────────────────────────
+
+/** @deprecated Use stellar.ts registerWallet() */
+export async function registerWallet(..._: any[]): Promise<never> {
+  throw new DeprecatedError('registerWallet');
 }
 
-export async function sendMessage(
-  payload: {
-    conversationId: number;
-    ciphertext: string;
-    nonce: string;
-    messageType?: 'text' | 'file' | 'image';
-    readOnce?: boolean;
-    expiresInSeconds?: number;
-  },
-  walletAddress: string
-): Promise<{ message: Message }> {
-  return request('/api/messages', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  }, walletAddress);
+/** @deprecated Use stellar.ts getWallet() */
+export async function getWallet(..._: any[]): Promise<never> {
+  throw new DeprecatedError('getWallet');
 }
 
-export async function deleteMessage(id: number, walletAddress: string): Promise<{ deleted: boolean }> {
-  return request(`/api/messages/${id}`, { method: 'DELETE' }, walletAddress);
+/** @deprecated Use stellar.ts */
+export async function getMyProfile(..._: any[]): Promise<never> {
+  throw new DeprecatedError('getMyProfile');
 }
 
-// ─── Files ──────────────────────────────────────────────────────────────────
+/** @deprecated Use stellar.ts getConversations() */
+export async function getConversations(..._: any[]): Promise<never> {
+  throw new DeprecatedError('getConversations');
+}
 
-/**
- * Upload an encrypted file blob to the server.
- * Uses multipart/form-data (not JSON).
- */
-export async function uploadEncryptedFile(
-  file: Blob,
-  conversationId: number,
-  originalName: string,
-  mimeType: string,
-  fileSize: number,
-  walletAddress: string
-): Promise<{ fileId: string; originalName: string; mimeType: string; fileSize: number }> {
-  const formData = new FormData();
-  formData.append('file', file, 'encrypted.enc');
-  formData.append('conversationId', String(conversationId));
-  formData.append('originalName', originalName);
-  formData.append('mimeType', mimeType);
-  formData.append('fileSize', String(fileSize));
+/** @deprecated Use stellar.ts getConversation() */
+export async function getConversation(..._: any[]): Promise<never> {
+  throw new DeprecatedError('getConversation');
+}
 
-  const headers: Record<string, string> = {};
-  if (walletAddress) {
-    headers['x-wallet-address'] = walletAddress;
+/** @deprecated Use stellar.ts createConversation() */
+export async function createConversation(..._: any[]): Promise<never> {
+  throw new DeprecatedError('createConversation');
+}
+
+/** @deprecated Use stellar.ts approveConversation() */
+export async function approveConversation(..._: any[]): Promise<never> {
+  throw new DeprecatedError('approveConversation');
+}
+
+/** @deprecated Use stellar.ts rejectConversation() */
+export async function rejectConversation(..._: any[]): Promise<never> {
+  throw new DeprecatedError('rejectConversation');
+}
+
+/** @deprecated Use stellar.ts deleteConversation() */
+export async function deleteConversation(..._: any[]): Promise<never> {
+  throw new DeprecatedError('deleteConversation');
+}
+
+/** @deprecated Use useWaku + IPFS. Messages go through Waku P2P, no server. */
+export async function getMessages(..._: any[]): Promise<never> {
+  throw new DeprecatedError('getMessages');
+}
+
+/** @deprecated Use useWaku sendChatMessage() */
+export async function sendMessage(..._: any[]): Promise<never> {
+  throw new DeprecatedError('sendMessage');
+}
+
+/** @deprecated Use ipfs.ts uploadToIpfs() */
+export async function uploadEncryptedFile(..._: any[]): Promise<never> {
+  throw new DeprecatedError('uploadEncryptedFile');
+}
+
+/** @deprecated Use ipfs.ts downloadFromIpfs() */
+export async function downloadEncryptedFile(..._: any[]): Promise<never> {
+  throw new DeprecatedError('downloadEncryptedFile');
+}
+
+/** @deprecated Use ipfs.ts ipfsGatewayUrl() */
+export function getFileUrl(..._: any[]): string {
+  console.warn('[Advaya] getFileUrl() is deprecated. Use ipfsGatewayUrl() from ipfs.ts.');
+  return '';
+}
+
+export class ApiError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+    this.name = 'ApiError';
   }
-  // Do NOT set Content-Type — browser will set it with boundary for FormData
-
-  const res = await fetch(`${API_BASE}/api/files/upload`, {
-    method: 'POST',
-    headers,
-    body: formData,
-  });
-
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new ApiError(res.status, data?.error || `Upload failed: ${res.status}`);
-  }
-  return data;
 }
-
-/**
- * Download the encrypted file blob from the server.
- * Returns raw ArrayBuffer for client-side decryption.
- */
-export async function downloadEncryptedFile(
-  fileId: string,
-  walletAddress: string
-): Promise<ArrayBuffer> {
-  const headers: Record<string, string> = {};
-  if (walletAddress) {
-    headers['x-wallet-address'] = walletAddress;
-  }
-
-  const res = await fetch(`${API_BASE}/api/files/${fileId}`, {
-    headers,
-  });
-
-  if (!res.ok) {
-    throw new ApiError(res.status, `File download failed: ${res.status}`);
-  }
-  return res.arrayBuffer();
-}
-
-/**
- * Get the URL for downloading an encrypted file.
- */
-export function getFileUrl(fileId: string): string {
-  return `${API_BASE}/api/files/${fileId}`;
-}
-
-export { ApiError };

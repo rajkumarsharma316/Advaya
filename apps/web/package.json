@@ -9,19 +9,25 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@helia/unixfs": "^8.0.4",
     "@stellar/freighter-api": "^6.0.1",
+    "@waku/sdk": "^0.0.36",
+    "blockstore-core": "^7.0.1",
+    "datastore-core": "^12.0.1",
+    "helia": "^7.1.0",
     "next": "16.2.9",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "socket.io-client": "^4.8.3",
     "tweetnacl": "^1.0.3",
-    "tweetnacl-util": "^0.15.1"
+    "tweetnacl-util": "^0.15.1",
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20.19.43",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/uuid": "^9.0.8",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
     "tailwindcss": "^4",
