@@ -183,9 +183,13 @@ export function useWaku(walletAddress?: string | null) {
     const encoder = await makeEncoder(chatTopic(payload.conversationId));
     const bytes = new TextEncoder().encode(JSON.stringify(payload));
     try {
-      await node.lightPush.send(encoder, { payload: bytes });
-    } catch (err) {
+      const res = await node.lightPush.send(encoder, { payload: bytes });
+      if (res.failures && res.failures.length > 0) {
+        throw new Error('Message not delivered to any Waku peers');
+      }
+    } catch (err: any) {
       console.warn('[Waku] LightPush send failed:', err);
+      throw err;
     }
   }, []);
 
@@ -201,9 +205,13 @@ export function useWaku(walletAddress?: string | null) {
     const encoder = await makeEncoder(systemTopic(targetWallet));
     const bytes = new TextEncoder().encode(JSON.stringify(payload));
     try {
-      await node.lightPush.send(encoder, { payload: bytes });
-    } catch (err) {
+      const res = await node.lightPush.send(encoder, { payload: bytes });
+      if (res.failures && res.failures.length > 0) {
+        throw new Error('System event not delivered to any Waku peers');
+      }
+    } catch (err: any) {
       console.warn('[Waku] System event send failed:', err);
+      throw err;
     }
   }, []);
 
