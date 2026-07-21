@@ -25,7 +25,7 @@ import {
 // routing info requirements (v0.0.36 standalone createDecoder needs 2 args).
 async function makeEncoder(contentTopic: string): Promise<any> {
   const node = await getWakuNode();
-  return node.createEncoder({ contentTopic });
+  return node.createEncoder({ contentTopic, ephemeral: false });
 }
 
 async function makeDecoder(contentTopic: string): Promise<any> {
