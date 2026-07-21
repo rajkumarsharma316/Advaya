@@ -1,0 +1,14 @@
+C:\Users\Victus\Documents\getstarted\Advaya\contracts\advaya\target\release\deps\serde-9e5194c9a558d568.d: C:\Users\Victus\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\lib.rs C:\Users\Victus\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\integer128.rs C:\Users\Victus\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\mod.rs C:\Users\Victus\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\de.rs C:\Users\Victus\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\ser.rs C:\Users\Victus\Documents\getstarted\Advaya\contracts\advaya\target\release\build\serde-83f6f038d9cd9a91\out/private.rs
+
+C:\Users\Victus\Documents\getstarted\Advaya\contracts\advaya\target\release\deps\libserde-9e5194c9a558d568.rlib: C:\Users\Victus\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\lib.rs C:\Users\Victus\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\integer128.rs C:\Users\Victus\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\mod.rs C:\Users\Victus\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\de.rs C:\Users\Victus\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\ser.rs C:\Users\Victus\Documents\getstarted\Advaya\contracts\advaya\target\release\build\serde-83f6f038d9cd9a91\out/private.rs
+
+C:\Users\Victus\Documents\getstarted\Advaya\contracts\advaya\target\release\deps\libserde-9e5194c9a558d568.rmeta: C:\Users\Victus\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\lib.rs C:\Users\Victus\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\integer128.rs C:\Users\Victus\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\mod.rs C:\Users\Victus\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\de.rs C:\Users\Victus\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\ser.rs C:\Users\Victus\Documents\getstarted\Advaya\contracts\advaya\target\release\build\serde-83f6f038d9cd9a91\out/private.rs
+
+C:\Users\Victus\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\lib.rs:
+C:\Users\Victus\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\integer128.rs:
+C:\Users\Victus\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\mod.rs:
+C:\Users\Victus\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\de.rs:
+C:\Users\Victus\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\ser.rs:
+C:\Users\Victus\Documents\getstarted\Advaya\contracts\advaya\target\release\build\serde-83f6f038d9cd9a91\out/private.rs:
+
+# env-dep:OUT_DIR=C:\\Users\\Victus\\Documents\\getstarted\\Advaya\\contracts\\advaya\\target\\release\\build\\serde-83f6f038d9cd9a91\\out
