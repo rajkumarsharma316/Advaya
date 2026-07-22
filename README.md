@@ -74,7 +74,7 @@ As part of the final production readiness phase, we have scaled the platform and
 ---
 
 ## 📊 Feedback Documentation & Implementation
-**[📊 View Live Google Form Responses Sheet](#)**
+**[📊 https://docs.google.com/spreadsheets/d/1_pKxlbvwxl-kF6Dbq0Neh2Zljwnv0Wt5zZTpDjfqKNc/edit?usp=sharing](#)**
 
 User feedback was collected through two channels to maximize user convenience: directly via our native in-app feedback UI and externally through our Official Google Form. Responses provided in the app are automatically synced with the Google Form.
 
