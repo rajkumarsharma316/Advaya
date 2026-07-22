@@ -51,7 +51,9 @@ export function NewConversationModal({ onClose, onCreated }: NewConversationModa
         const { Keypair, TransactionBuilder, Networks, Asset, Server } = await import('@stellar/stellar-sdk');
         const { signTransaction } = await import('@stellar/freighter-api');
         
-        const TREASURY = 'GATQ6CEKXFTSNGM2YZTAXUAA7BDDMBN6ECFJQ7N56I2ACSOXMKOWKWMZ';
+        const TREASURY = process.env.NEXT_PUBLIC_TREASURY_ADDRESS;
+        if (!TREASURY) throw new Error("NEXT_PUBLIC_TREASURY_ADDRESS is not set in .env.local");
+
         const server = new Server('https://horizon-testnet.stellar.org');
         
         // 1. Load sender account to get sequence number
