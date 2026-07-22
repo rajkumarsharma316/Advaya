@@ -73,11 +73,11 @@ export function NewConversationModal({ onClose, onCreated }: NewConversationModa
           .build();
           
         // 3. Request signature from Freighter
-        const signedXdr = await signTransaction(tx.toXDR(), { networkPassphrase: Networks.TESTNET });
+        const { signedTxXdr } = await signTransaction(tx.toXDR(), { networkPassphrase: Networks.TESTNET });
         
         // 4. Submit to Horizon
         setPaymentStatus('Submitting payment to Stellar network...');
-        const txObj = TransactionBuilder.fromXDR(signedXdr, Networks.TESTNET);
+        const txObj = TransactionBuilder.fromXDR(signedTxXdr, Networks.TESTNET);
         await server.submitTransaction(txObj as any);
       } catch (payErr: any) {
         console.error('Payment failed', payErr);
