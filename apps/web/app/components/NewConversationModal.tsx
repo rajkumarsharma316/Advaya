@@ -48,7 +48,7 @@ export function NewConversationModal({ onClose, onCreated }: NewConversationModa
       setPaymentStatus('Awaiting 1 XLM payment in Freighter...');
 
       try {
-        const { Keypair, TransactionBuilder, Networks, Asset, Horizon } = await import('@stellar/stellar-sdk');
+        const { Keypair, TransactionBuilder, Networks, Asset, Horizon, Operation } = await import('@stellar/stellar-sdk');
         const { signTransaction } = await import('@stellar/freighter-api');
         
         const TREASURY = process.env.NEXT_PUBLIC_TREASURY_ADDRESS;
@@ -63,7 +63,7 @@ export function NewConversationModal({ onClose, onCreated }: NewConversationModa
         const fee = await server.fetchBaseFee();
         const tx = new TransactionBuilder(account, { fee: fee.toString(), networkPassphrase: Networks.TESTNET })
           .addOperation(
-            TransactionBuilder.payment({
+            Operation.payment({
               destination: TREASURY,
               asset: Asset.native(),
               amount: '1.0000000', // 1 XLM
