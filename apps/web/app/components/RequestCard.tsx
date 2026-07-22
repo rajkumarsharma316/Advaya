@@ -15,6 +15,7 @@ import {
 } from '../lib/stellar';
 import { useAuth } from '../context/AuthContext';
 import { useWaku, type WakuConversationUpdate } from '../hooks/useWaku';
+import { useRelay } from '../hooks/useRelay';
 import { shortAddress, getAvatarText, getAvatarGradient } from '../lib/crypto';
 
 interface RequestCardProps {
@@ -25,6 +26,7 @@ interface RequestCardProps {
 export function RequestCard({ conversation, onUpdate }: RequestCardProps) {
   const { walletAddress, keyPair, displayName } = useAuth();
   const { sendSystemEvent } = useWaku(walletAddress);
+  const { relaySendSystemEvent } = useRelay(walletAddress);
   const [loading, setLoading] = useState<'approve' | 'reject' | null>(null);
 
   const senderName = conversation.sender_name || shortAddress(conversation.sender);
@@ -35,11 +37,16 @@ export function RequestCard({ conversation, onUpdate }: RequestCardProps) {
     if (!walletAddress || !keyPair || loading) return;
     setLoading(action);
     try {
-      const fn = action === 'approve' ? approveConversation : rejectConversation;
-      const updated = await fn(conversation.id, walletAddress);
+      let updated;
+      if (action === 'approve') {
+        // Pass the receiver's pub key so the sender can encrypt messages to us
+        updated = await approveConversation(conversation.id, walletAddress, keyPair.publicKey, displayName);
+      } else {
+        updated = await rejectConversation(conversation.id, walletAddress);
+      }
       onUpdate(updated);
 
-      // Notify the sender via Waku
+      // Notify the sender via Waku (best-effort, don't block on failure)
       const eventType = action === 'approve' ? 'conversation_approved' : 'conversation_rejected';
       const wakuUpdate: WakuConversationUpdate = {
         type: eventType,
@@ -50,8 +57,21 @@ export function RequestCard({ conversation, onUpdate }: RequestCardProps) {
         updatedAt: new Date().toISOString(),
       };
 
-      await sendSystemEvent(conversation.sender, wakuUpdate);
-      console.log(`[Waku] ${eventType} sent to`, conversation.sender.slice(0, 8));
+      // Send via Waku (best-effort)
+      try {
+        await sendSystemEvent(conversation.sender, wakuUpdate);
+        console.log(`[Waku] ${eventType} sent to`, conversation.sender.slice(0, 8));
+      } catch (wakuErr) {
+        console.warn(`[Waku] Failed to send ${eventType}:`, wakuErr);
+      }
+
+      // ALWAYS send via relay too (guaranteed delivery)
+      try {
+        await relaySendSystemEvent(conversation.sender, wakuUpdate);
+        console.log(`[Relay] ${eventType} sent to`, conversation.sender.slice(0, 8));
+      } catch (relayErr) {
+        console.warn(`[Relay] Failed to send ${eventType}:`, relayErr);
+      }
     } catch (err) {
       console.error('[RequestCard] Action failed:', err);
     } finally {

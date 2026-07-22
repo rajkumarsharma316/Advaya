@@ -4,6 +4,7 @@
   "description": "Advaya decentralized communication backend",
   "main": "dist/index.js",
   "scripts": {
+    "relay": "nodemon --exec ts-node src/relay.ts",
     "dev": "nodemon --exec ts-node src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",

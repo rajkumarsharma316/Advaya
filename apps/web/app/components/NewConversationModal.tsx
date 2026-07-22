@@ -17,6 +17,7 @@ import {
 } from '../lib/stellar';
 import { useAuth } from '../context/AuthContext';
 import { useWaku, type WakuConversationRequest } from '../hooks/useWaku';
+import { useRelay } from '../hooks/useRelay';
 
 interface NewConversationModalProps {
   onClose: () => void;
@@ -26,6 +27,7 @@ interface NewConversationModalProps {
 export function NewConversationModal({ onClose, onCreated }: NewConversationModalProps) {
   const { walletAddress, keyPair, displayName } = useAuth();
   const { sendSystemEvent } = useWaku(walletAddress);
+  const { relaySendSystemEvent } = useRelay(walletAddress);
   const [address, setAddress] = useState('');
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
@@ -62,7 +64,7 @@ export function NewConversationModal({ onClose, onCreated }: NewConversationModa
         displayName
       );
 
-      // Broadcast conversation request via Waku to receiver's system topic
+      // Broadcast conversation request via Waku to the receiver
       const wakuRequest: WakuConversationRequest = {
         type: 'conversation_request',
         conversationId: conv.id,
@@ -74,12 +76,25 @@ export function NewConversationModal({ onClose, onCreated }: NewConversationModa
         createdAt: conv.created_at,
       };
 
-      await sendSystemEvent(receiver, wakuRequest);
-      console.log('[Waku] Conversation request sent to', receiver.slice(0, 8));
+      // Send via Waku (best-effort)
+      try {
+        await sendSystemEvent(receiver, wakuRequest);
+      } catch (wakuErr) {
+        console.warn('[Waku] Failed to send, using relay fallback:', wakuErr);
+      }
+
+      // ALWAYS send via relay too (guaranteed delivery)
+      try {
+        await relaySendSystemEvent(receiver, wakuRequest);
+        console.log('[Relay] Conversation request sent to', receiver.slice(0, 8));
+      } catch (relayErr) {
+        console.warn('[Relay] Fallback send failed:', relayErr);
+      }
 
       onCreated(conv);
       onClose();
     } catch (err: any) {
+      console.error(err);
       setError(err.message || 'Failed to create conversation');
     } finally {
       setLoading(false);

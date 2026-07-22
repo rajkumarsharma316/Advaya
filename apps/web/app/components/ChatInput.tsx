@@ -15,6 +15,7 @@
 
 import React, { useRef, useState, useCallback } from 'react';
 import { useWaku } from '../hooks/useWaku';
+import { useRelay } from '../hooks/useRelay';
 import { useAuth } from '../context/AuthContext';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -67,6 +68,7 @@ export function ChatInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { sendChatMessage } = useWaku(walletAddress);
+  const { relaySendChatMessage, relayJoinConversation } = useRelay(walletAddress);
 
   const encrypt = useCallback(async (plaintext: string) => {
     const { encryptMessage } = await import('../lib/crypto');
@@ -141,10 +143,9 @@ export function ChatInput({
         keyPair.secretKey
       );
 
-      // 5. Pin encrypted metadata to IPFS
-      setUploadProgress('Pinning metadata…');
-      const metaBytes = new TextEncoder().encode(ciphertext);
-      const messageCid = await uploadToIpfs(metaBytes);
+      // 5. We don't need to pin the metadata to IPFS because it's tiny.
+      // We will send the encrypted metadata directly in the message payload.
+      const messageCid = undefined;
 
       // 6. Build Waku message (no backend needed)
       const messageId = uuidv4();
@@ -154,12 +155,12 @@ export function ChatInput({
         : null;
       const messageType: 'text' | 'file' | 'image' = attachment.isImage ? 'image' : 'file';
 
-      // 7. Publish to Waku P2P network
-      await sendChatMessage({
-        type: 'chat_message',
+      // 7. Publish to Waku P2P network (best-effort)
+      const wakuPayload = {
+        type: 'chat_message' as const,
         conversationId,
         messageId,
-        ciphertext: 'IPFS_BLOB',
+        ciphertext, // Send actual ciphertext instead of 'IPFS_BLOB'
         nonce,
         ipfsCid: messageCid,
         sender: walletAddress,
@@ -170,7 +171,20 @@ export function ChatInput({
         fileId: fileCid,
         fileName: attachment.file.name,
         fileSize: attachment.file.size,
-      });
+      };
+
+      try {
+        await sendChatMessage(wakuPayload);
+      } catch (wakuErr) {
+        console.warn('[Waku] Chat message send failed:', wakuErr);
+      }
+
+      // Also send via relay (guaranteed delivery)
+      try {
+        relaySendChatMessage(conversationId, wakuPayload);
+      } catch (relayErr) {
+        console.warn('[Relay] Chat message send failed:', relayErr);
+      }
 
       // 8. Notify parent component
       onMessageSent(
@@ -212,9 +226,8 @@ export function ChatInput({
       // 1. Encrypt the message
       const { ciphertext, nonce } = await encrypt(trimmed);
 
-      // 2. Pin ciphertext to IPFS
-      const textBytes = new TextEncoder().encode(ciphertext);
-      const messageCid = await uploadToIpfs(textBytes);
+      // 2. (Skipped) We no longer pin text messages to IPFS. They are small
+      // enough to travel directly in the Waku/Relay payload.
 
       // 3. Build Waku message
       const messageId = uuidv4();
@@ -223,20 +236,33 @@ export function ChatInput({
         ? new Date(Date.now() + Number(expiresIn) * 60 * 1000).toISOString()
         : null;
 
-      // 4. Publish to Waku — no backend needed
-      await sendChatMessage({
-        type: 'chat_message',
+      // 4. Publish to Waku (best-effort)
+      const wakuPayload = {
+        type: 'chat_message' as const,
         conversationId,
         messageId,
-        ciphertext: 'IPFS_BLOB',
+        ciphertext, // Send actual ciphertext instead of 'IPFS_BLOB'
         nonce,
-        ipfsCid: messageCid,
+        ipfsCid: undefined,
         sender: walletAddress,
         sentAt,
-        messageType: 'text',
+        messageType: 'text' as const,
         readOnce,
         expiresAt,
-      });
+      };
+
+      try {
+        await sendChatMessage(wakuPayload);
+      } catch (wakuErr) {
+        console.warn('[Waku] Chat message send failed:', wakuErr);
+      }
+
+      // Also send via relay (guaranteed delivery)
+      try {
+        relaySendChatMessage(conversationId, wakuPayload);
+      } catch (relayErr) {
+        console.warn('[Relay] Chat message send failed:', relayErr);
+      }
 
       // 5. Notify parent with plaintext for immediate display
       onMessageSent(trimmed, sentAt, messageId, expiresAt);

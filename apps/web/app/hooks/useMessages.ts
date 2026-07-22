@@ -1,24 +1,41 @@
 'use client';
 
 /**
- * useMessages — Fully Decentralized
- * ───────────────────────────────────
+ * useMessages — Hybrid: Waku P2P + Relay Fallback
+ * ─────────────────────────────────────────────────
  * Replaces GET /api/messages/:conversationId with:
  *   - Waku Store queries (historical messages, ~30 day retention)
  *   - Waku Filter subscriptions (real-time incoming messages)
- *
- * Message format on Waku:
- *   type: 'chat_message'
- *   ciphertext: 'IPFS_BLOB' (content stored on IPFS)
- *   ipfsCid: '<CID>'
- *   nonce: '<base64>'
- *   sender: '<walletAddress>'
- *   sentAt: '<ISO timestamp>'
- *   messageType: 'text' | 'file' | 'image'
+ *   - Socket.io relay (fallback for real-time when Waku is down)
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useWaku, type WakuChatMessage } from './useWaku';
+import { useRelay } from './useRelay';
+
+// ─── Local Storage Cache ─────────────────────────────────────────────────────
+
+const CACHE_PREFIX = 'advaya_msgs_';
+
+function getLocalMessages(conversationId: string): Message[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const data = localStorage.getItem(CACHE_PREFIX + conversationId);
+    if (!data) return [];
+    return JSON.parse(data);
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalMessages(conversationId: string, messages: Message[]) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(CACHE_PREFIX + conversationId, JSON.stringify(messages));
+  } catch (err) {
+    console.warn('[LocalCache] Failed to save messages', err);
+  }
+}
 
 // ─── Message type exposed to the rest of the app ─────────────────────────────
 
@@ -75,6 +92,11 @@ export function useMessages(
     queryMessageHistory,
     isReady: wakuReady,
   } = useWaku(walletAddress);
+  const {
+    isConnected: relayConnected,
+    relayJoinConversation,
+    relaySubscribeToChatMessages,
+  } = useRelay(walletAddress);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -97,7 +119,16 @@ export function useMessages(
         !m.expires_at || new Date(m.expires_at).getTime() > now
       );
 
-      if (mountedRef.current) setMessages(valid);
+      if (mountedRef.current) {
+        setMessages(prev => {
+          // Merge Waku history with our local cache to avoid losing relay messages
+          const combined = [...prev, ...valid];
+          // Deduplicate by message ID
+          const unique = Array.from(new Map(combined.map(item => [item.id, item])).values());
+          // Sort by date ascending
+          return unique.sort((a, b) => new Date(a.sent_at).getTime() - new Date(b.sent_at).getTime());
+        });
+      }
     } catch (err: any) {
       if (mountedRef.current) setError(err.message || 'Failed to load messages');
     } finally {
@@ -111,12 +142,27 @@ export function useMessages(
       setMessages([]);
       return;
     }
+    
+    // 1. Load instantly from local storage cache
+    const cached = getLocalMessages(conversationId);
+    if (cached.length > 0) {
+      setMessages(cached);
+    }
+
+    // 2. Try fetching from Waku Store in background
     if (wakuReady) {
       fetchMessages();
     }
   }, [conversationId, wakuReady, fetchMessages]);
 
-  // ─── Live subscription for real-time messages ──────────────────────────────
+  // Save to local storage whenever messages change
+  useEffect(() => {
+    if (conversationId && messages.length > 0) {
+      saveLocalMessages(conversationId, messages);
+    }
+  }, [conversationId, messages]);
+
+  // ─── Waku: Live subscription for real-time messages ────────────────────────
 
   useEffect(() => {
     if (!conversationId || !wakuReady) return;
@@ -142,6 +188,32 @@ export function useMessages(
       if (unsubFn) unsubFn();
     };
   }, [conversationId, wakuReady, subscribeToChatMessages]);
+
+  // ─── Relay: Join conversation room + live subscription ─────────────────────
+
+  useEffect(() => {
+    if (!conversationId || !relayConnected) return;
+
+    // Join the relay conversation room
+    relayJoinConversation(conversationId);
+
+    // Subscribe to chat messages from the relay
+    const unsub = relaySubscribeToChatMessages((wakuMsg: WakuChatMessage) => {
+      if (!mountedRef.current) return;
+      if (wakuMsg.conversationId !== conversationId) return;
+
+      // Ignore expired
+      if (wakuMsg.expiresAt && new Date(wakuMsg.expiresAt).getTime() <= Date.now()) return;
+
+      const msg = wakuMsgToMessage(wakuMsg);
+      setMessages(prev => {
+        if (prev.find(m => m.id === msg.id)) return prev;
+        return [...prev, msg];
+      });
+    });
+
+    return unsub;
+  }, [conversationId, relayConnected, relayJoinConversation, relaySubscribeToChatMessages]);
 
   // ─── Helper to optimistically add a sent message ───────────────────────────
 

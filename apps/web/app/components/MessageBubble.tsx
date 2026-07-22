@@ -274,15 +274,18 @@ export function MessageBubble({ message, senderPubKey, isConsecutive }: MessageB
       try {
         let actualCiphertext = message.ciphertext;
 
-        // Fetch from IPFS if present
-        if (message.ipfs_cid) {
-          const { downloadFromIpfs } = await import('../lib/ipfs');
-          const bytes = await downloadFromIpfs(message.ipfs_cid);
-          actualCiphertext = new TextDecoder().decode(bytes);
-        } else if (actualCiphertext === 'IPFS_BLOB') {
-          // Fallback if CID is missing but marked as IPFS
-          if (!cancelled) setPlaintext(null);
-          return;
+        // If the sender bypassed IPFS (new behavior), ciphertext contains the actual encrypted data.
+        // Otherwise, it will be 'IPFS_BLOB' and we MUST fetch from IPFS (old behavior).
+        if (actualCiphertext === 'IPFS_BLOB') {
+          if (message.ipfs_cid) {
+            const { downloadFromIpfs } = await import('../lib/ipfs');
+            const bytes = await downloadFromIpfs(message.ipfs_cid);
+            actualCiphertext = new TextDecoder().decode(bytes);
+          } else {
+            // Fallback if CID is missing but marked as IPFS
+            if (!cancelled) setPlaintext(null);
+            return;
+          }
         }
 
         const result = decryptMessage(

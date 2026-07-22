@@ -259,13 +259,22 @@ export async function getConversation(id: string, walletAddress: string): Promis
  */
 export async function approveConversation(
   id: string,
-  walletAddress: string
+  walletAddress: string,
+  receiverPubKey?: string,
+  receiverName?: string | null
 ): Promise<Conversation> {
   const convos = loadConversations();
   const idx = convos.findIndex(c => (c.id === id || String(c.id) === String(id)) && c.receiver === walletAddress);
   if (idx === -1) throw new Error('Conversation not found');
 
-  const updated = { ...convos[idx], status: 'approved' as ConversationStatus, updated_at: new Date().toISOString() };
+  const updated = {
+    ...convos[idx],
+    status: 'approved' as ConversationStatus,
+    updated_at: new Date().toISOString(),
+    // Store the receiver's public key so the sender can encrypt messages
+    receiver_pub_key: receiverPubKey || convos[idx].receiver_pub_key,
+    receiver_name: receiverName ?? convos[idx].receiver_name,
+  };
   convos[idx] = updated;
   saveConversations(convos);
 
@@ -322,12 +331,28 @@ export function receiveConversationRequest(convo: Conversation): void {
 
 /**
  * When the other party approves/rejects on Waku, update local state.
+ * On approval, also store the approver's pub key so we can encrypt messages.
  */
-export function receiveConversationUpdate(id: string, status: ConversationStatus): void {
+export function receiveConversationUpdate(
+  id: string,
+  status: ConversationStatus,
+  actorPubKey?: string,
+  actorName?: string | null
+): void {
   const convos = loadConversations();
   const idx = convos.findIndex(c => c.id === id || String(c.id) === String(id));
   if (idx !== -1) {
-    convos[idx] = { ...convos[idx], status, updated_at: new Date().toISOString() };
+    const convo = convos[idx];
+    const patch: Partial<Conversation> = {
+      status,
+      updated_at: new Date().toISOString(),
+    };
+    // If approved and we have the actor's pub key, store it as receiver_pub_key
+    if (status === 'approved' && actorPubKey) {
+      patch.receiver_pub_key = actorPubKey;
+      if (actorName) patch.receiver_name = actorName;
+    }
+    convos[idx] = { ...convo, ...patch };
     saveConversations(convos);
   }
 }
