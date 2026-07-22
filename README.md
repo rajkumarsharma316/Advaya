@@ -6,6 +6,8 @@ Advaya is a next-generation decentralized application (dApp) that provides fully
 🔗 **Live App**
 https://advaya-teal.vercel.app/
 
+**PPT Link** - https://docs.google.com/presentation/d/1CeqTNQdsSkp4zdDloj0z5yNV6KJjb7J6OY8datrCyeo/edit?usp=sharing
+
 🎥 **Video Demo**
 [Advaya_Product_Demo_Level5.mp4](#)
 
