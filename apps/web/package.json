@@ -9,12 +9,8 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@helia/unixfs": "^8.0.4",
     "@stellar/freighter-api": "^6.0.1",
     "@waku/sdk": "^0.0.36",
-    "blockstore-core": "^7.0.1",
-    "datastore-core": "^12.0.1",
-    "helia": "^7.1.0",
     "next": "16.2.9",
     "react": "19.2.4",
     "react-dom": "19.2.4",
