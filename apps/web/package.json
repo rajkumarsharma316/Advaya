@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@stellar/freighter-api": "^6.0.1",
+    "@stellar/stellar-sdk": "^16.0.1",
     "@waku/sdk": "^0.0.36",
     "next": "16.2.9",
     "react": "19.2.4",

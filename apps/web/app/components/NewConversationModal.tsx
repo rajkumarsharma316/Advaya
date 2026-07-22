@@ -32,6 +32,7 @@ export function NewConversationModal({ onClose, onCreated }: NewConversationModa
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [paymentStatus, setPaymentStatus] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,10 +43,50 @@ export function NewConversationModal({ onClose, onCreated }: NewConversationModa
       return;
     }
 
-    setLoading(true);
-    setError('');
+      setLoading(true);
+      setError('');
+      setPaymentStatus('Awaiting 1 XLM payment in Freighter...');
 
-    try {
+      try {
+        const { Keypair, TransactionBuilder, Networks, Asset, Server } = await import('@stellar/stellar-sdk');
+        const { signTransaction } = await import('@stellar/freighter-api');
+        
+        const TREASURY = 'GATQ6CEKXFTSNGM2YZTAXUAA7BDDMBN6ECFJQ7N56I2ACSOXMKOWKWMZ';
+        const server = new Server('https://horizon-testnet.stellar.org');
+        
+        // 1. Load sender account to get sequence number
+        const account = await server.loadAccount(walletAddress);
+        
+        // 2. Build 1 XLM Payment Transaction
+        const fee = await server.fetchBaseFee();
+        const tx = new TransactionBuilder(account, { fee: fee.toString(), networkPassphrase: Networks.TESTNET })
+          .addOperation(
+            TransactionBuilder.payment({
+              destination: TREASURY,
+              asset: Asset.native(),
+              amount: '1.0000000', // 1 XLM
+            })
+          )
+          .setTimeout(120)
+          .build();
+          
+        // 3. Request signature from Freighter
+        const signedXdr = await signTransaction(tx.toXDR(), { network: 'TESTNET' });
+        
+        // 4. Submit to Horizon
+        setPaymentStatus('Submitting payment to Stellar network...');
+        const txObj = TransactionBuilder.fromXDR(signedXdr, Networks.TESTNET);
+        await server.submitTransaction(txObj as any);
+      } catch (payErr: any) {
+        console.error('Payment failed', payErr);
+        setError('Payment failed or cancelled: ' + (payErr.message || String(payErr)));
+        setLoading(false);
+        setPaymentStatus('');
+        return;
+      }
+      
+      setPaymentStatus('Payment successful! Creating chat...');
+
       // Try to look up receiver's pub key (for caching purposes)
       let receiverPubKey = '';
       try {
@@ -184,7 +225,7 @@ export function NewConversationModal({ onClose, onCreated }: NewConversationModa
               disabled={loading || address.length !== 56}
               style={{ flex: 2 }}
             >
-              {loading ? 'Sending via Waku…' : 'Send Request'}
+              {loading ? (paymentStatus || 'Sending via Waku…') : 'Pay 1 XLM & Send Request'}
             </button>
           </div>
         </form>
