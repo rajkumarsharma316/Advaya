@@ -257,7 +257,7 @@ function FileBubbleContent({ meta, senderPubKey, isSent }: FileBubbleContentProp
 
 // ─── Main MessageBubble ──────────────────────────────────────────────────
 
-export function MessageBubble({ message, senderPubKey, isConsecutive }: MessageBubbleProps) {
+export function MessageBubble({ message, senderPubKey, isConsecutive, onDelete }: MessageBubbleProps) {
   const { walletAddress, keyPair } = useAuth();
   const isSent = message.sender === walletAddress;
 
