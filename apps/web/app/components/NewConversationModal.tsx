@@ -73,7 +73,7 @@ export function NewConversationModal({ onClose, onCreated }: NewConversationModa
           .build();
           
         // 3. Request signature from Freighter
-        const signedXdr = await signTransaction(tx.toXDR(), { network: 'TESTNET' });
+        const signedXdr = await signTransaction(tx.toXDR(), { networkPassphrase: Networks.TESTNET });
         
         // 4. Submit to Horizon
         setPaymentStatus('Submitting payment to Stellar network...');
