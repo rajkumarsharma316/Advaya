@@ -48,13 +48,13 @@ export function NewConversationModal({ onClose, onCreated }: NewConversationModa
       setPaymentStatus('Awaiting 1 XLM payment in Freighter...');
 
       try {
-        const { Keypair, TransactionBuilder, Networks, Asset, Server } = await import('@stellar/stellar-sdk');
+        const { Keypair, TransactionBuilder, Networks, Asset, Horizon } = await import('@stellar/stellar-sdk');
         const { signTransaction } = await import('@stellar/freighter-api');
         
         const TREASURY = process.env.NEXT_PUBLIC_TREASURY_ADDRESS;
         if (!TREASURY) throw new Error("NEXT_PUBLIC_TREASURY_ADDRESS is not set in .env.local");
 
-        const server = new Server('https://horizon-testnet.stellar.org');
+        const server = new Horizon.Server('https://horizon-testnet.stellar.org');
         
         // 1. Load sender account to get sequence number
         const account = await server.loadAccount(walletAddress);
