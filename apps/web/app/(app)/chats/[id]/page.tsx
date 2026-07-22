@@ -130,7 +130,9 @@ export default function ChatRoomPage() {
     messageId: string,
     expiresAt?: string | null,
     messageType?: 'text' | 'file' | 'image',
-    fileInfo?: { fileId: string; fileName: string; fileSize: number; fileNonce: string }
+    fileInfo?: { fileId: string; fileName: string; fileSize: number; fileNonce: string },
+    ciphertext?: string,
+    nonce?: string
   ) => {
     setSentMessages(prev => {
       const next = new Map(prev);
@@ -138,13 +140,13 @@ export default function ChatRoomPage() {
       return next;
     });
 
-    // Optimistically append to message list
+    // Optimistically append to message list with real ciphertext so it survives reloads
     appendMessage({
       id: messageId,
       conversation_id: conversationId!,
       sender: walletAddress!,
-      ciphertext: '',
-      nonce: '',
+      ciphertext: ciphertext || '',
+      nonce: nonce || '',
       message_type: messageType || 'text',
       read_once: false,
       sent_at: sentAt,

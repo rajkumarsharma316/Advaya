@@ -35,7 +35,9 @@ interface ChatInputProps {
     messageId: string,
     expiresAt?: string | null,
     messageType?: 'text' | 'file' | 'image',
-    fileInfo?: { fileId: string; fileName: string; fileSize: number; fileNonce: string }
+    fileInfo?: { fileId: string; fileName: string; fileSize: number; fileNonce: string },
+    ciphertext?: string,
+    nonce?: string
   ) => void;
   disabled?: boolean;
 }
@@ -193,7 +195,9 @@ export function ChatInput({
         messageId,
         expiresAt,
         messageType,
-        { fileId: fileCid, fileName: attachment.file.name, fileSize: attachment.file.size, fileNonce }
+        { fileId: fileCid, fileName: attachment.file.name, fileSize: attachment.file.size, fileNonce },
+        ciphertext,
+        nonce
       );
 
       removeAttachment();
@@ -265,7 +269,7 @@ export function ChatInput({
       }
 
       // 5. Notify parent with plaintext for immediate display
-      onMessageSent(trimmed, sentAt, messageId, expiresAt);
+      onMessageSent(trimmed, sentAt, messageId, expiresAt, 'text', undefined, ciphertext, nonce);
 
       setText('');
       if (textareaRef.current) textareaRef.current.style.height = 'auto';
