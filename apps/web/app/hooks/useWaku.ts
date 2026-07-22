@@ -183,7 +183,9 @@ export function useWaku(walletAddress?: string | null) {
     const encoder = await makeEncoder(chatTopic(payload.conversationId));
     const bytes = new TextEncoder().encode(JSON.stringify(payload));
     try {
-      const res = await node.lightPush.send(encoder, { payload: bytes });
+      const sendPromise = node.lightPush.send(encoder, { payload: bytes });
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Waku send timeout')), 3000));
+      const res = await Promise.race([sendPromise, timeoutPromise]) as any;
       if (res.failures && res.failures.length > 0) {
         throw new Error('Message not delivered to any Waku peers');
       }
@@ -205,7 +207,9 @@ export function useWaku(walletAddress?: string | null) {
     const encoder = await makeEncoder(systemTopic(targetWallet));
     const bytes = new TextEncoder().encode(JSON.stringify(payload));
     try {
-      const res = await node.lightPush.send(encoder, { payload: bytes });
+      const sendPromise = node.lightPush.send(encoder, { payload: bytes });
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Waku send timeout')), 3000));
+      const res = await Promise.race([sendPromise, timeoutPromise]) as any;
       if (res.failures && res.failures.length > 0) {
         throw new Error('System event not delivered to any Waku peers');
       }
