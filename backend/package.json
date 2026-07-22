@@ -1,42 +1,23 @@
 {
   "name": "advaya-backend",
   "version": "1.0.0",
-  "description": "Advaya decentralized communication backend",
+  "description": "Advaya decentralized communication relay",
   "main": "dist/index.js",
   "scripts": {
-    "relay": "nodemon --exec ts-node src/relay.ts",
     "dev": "nodemon --exec ts-node src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js",
-    "db:migrate": "node -r ts-node/register src/db/migrate.ts"
+    "start": "node dist/index.js"
   },
   "dependencies": {
-    "@stellar/stellar-sdk": "^11.2.2",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
-    "express-rate-limit": "^7.1.5",
-    "helmet": "^7.1.0",
-    "jsonwebtoken": "^9.0.2",
-    "morgan": "^1.10.0",
-    "multer": "^2.2.0",
-    "pg": "^8.11.3",
-    "redis": "^4.6.10",
-    "socket.io": "^4.7.2",
-    "tweetnacl": "^1.0.3",
-    "tweetnacl-util": "^0.15.1",
-    "uuid": "^9.0.1",
-    "zod": "^3.22.4"
+    "socket.io": "^4.7.2"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
-    "@types/jsonwebtoken": "^9.0.5",
-    "@types/morgan": "^1.9.9",
-    "@types/multer": "^2.2.0",
     "@types/node": "^20.10.6",
-    "@types/pg": "^8.10.9",
-    "@types/uuid": "^9.0.7",
     "nodemon": "^3.0.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.3.3"
