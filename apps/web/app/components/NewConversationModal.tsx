@@ -89,6 +89,7 @@ export function NewConversationModal({ onClose, onCreated }: NewConversationModa
       
       setPaymentStatus('Payment successful! Creating chat...');
 
+    try {
       // Try to look up receiver's pub key (for caching purposes)
       let receiverPubKey = '';
       try {
