@@ -1,24 +1,17 @@
 /**
- * Advaya IPFS Client (Helia + Pinata)
+ * Advaya IPFS Client (Pinata REST API)
  * ────────────────────────────────────
  * Fully decentralized file/message storage.
  *
  * Upload strategy:
- *   1. Add content to local in-browser Helia node (fast, instant CID)
- *   2. Pin to Pinata cloud (optional but highly recommended for persistence)
+ *   1. Pin directly to Pinata cloud using their REST API for persistence.
  *
  * Download strategy:
- *   1. Try local Helia node (instant if we uploaded it)
- *   2. Try Pinata dedicated gateway (fast, reliable)
- *   3. Fall back to public IPFS gateways (ipfs.io, cloudflare)
+ *   1. Try Pinata dedicated gateway (fast, reliable)
+ *   2. Fall back to public IPFS gateways (ipfs.io, cloudflare)
  *
- * This completely replaces the centralized /api/files/* upload server.
+ * (Removed local Helia node to fix Vercel Next.js 15+ Turbopack build failures)
  */
-
-import { createHelia } from 'helia';
-import { unixfs } from '@helia/unixfs';
-import { MemoryBlockstore } from 'blockstore-core/memory';
-import { MemoryDatastore } from 'datastore-core/memory';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -34,77 +27,25 @@ const PUBLIC_GATEWAYS = [
   'https://dweb.link/ipfs',
 ];
 
-// ─── Helia singleton ─────────────────────────────────────────────────────────
-
-let heliaInstance: Awaited<ReturnType<typeof createHelia>> | null = null;
-let fsInstance: ReturnType<typeof unixfs> | null = null;
-let initPromise: Promise<void> | null = null;
-
-/**
- * Initialize the in-browser Helia (IPFS) node.
- * Uses MemoryBlockstore by default (fast, no IndexedDB permission issues).
- */
-export async function initIpfs(): Promise<void> {
-  if (heliaInstance) return;
-  if (initPromise) return initPromise;
-
-  initPromise = (async () => {
-    try {
-      const blockstore = new MemoryBlockstore();
-      const datastore = new MemoryDatastore();
-
-      heliaInstance = await createHelia({ blockstore, datastore });
-      fsInstance = unixfs(heliaInstance);
-
-      console.log('✅ Helia IPFS node initialized');
-    } catch (err) {
-      console.error('❌ Failed to initialize Helia:', err);
-      initPromise = null;
-      throw err;
-    }
-  })();
-
-  return initPromise;
-}
-
 // ─── Upload ──────────────────────────────────────────────────────────────────
 
 /**
- * Upload raw bytes to IPFS.
+ * Upload raw bytes to IPFS using Pinata.
  * Returns the CID string.
- *
- * Also pins to Pinata in the background for persistence.
  */
 export async function uploadToIpfs(bytes: Uint8Array): Promise<string> {
-  await initIpfs();
-  const cid = await fsInstance!.addBytes(bytes);
-  const cidStr = cid.toString();
-
-  // Pin to Pinata in the background (don't await — don't block the UX)
-  pinToPinata(bytes, cidStr).catch(err =>
-    console.warn('[IPFS] Pinata pin failed (will use local/gateway fallback):', err)
-  );
-
-  return cidStr;
-}
-
-/**
- * Pin content to Pinata for persistent storage.
- * Uses the Pinata Pinning Services API.
- */
-export async function pinToPinata(bytes: Uint8Array, cidHint?: string): Promise<string> {
   if (!PINATA_JWT) {
-    console.warn('[Pinata] No JWT configured — skipping cloud pin');
-    return cidHint || '';
+    throw new Error('PINATA_JWT is required to upload files in the cloud version of Advaya.');
   }
 
   // Slice to a concrete ArrayBuffer to satisfy TypeScript's BlobPart type
   const buffer = bytes.buffer instanceof ArrayBuffer
     ? bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
     : new Uint8Array(bytes).buffer;
+  
   const blob = new Blob([buffer], { type: 'application/octet-stream' });
   const formData = new FormData();
-  formData.append('file', blob, cidHint || 'advaya_upload');
+  formData.append('file', blob, 'advaya_upload');
 
   const res = await fetch(`${PINATA_API}/pinning/pinFileToIPFS`, {
     method: 'POST',
@@ -130,47 +71,19 @@ export async function pinToPinata(bytes: Uint8Array, cidHint?: string): Promise<
  * Download raw bytes from IPFS by CID.
  *
  * Strategy:
- *   1. Local Helia node (if we have the block in memory)
- *   2. Pinata gateway (if JWT configured)
- *   3. Public gateways (ipfs.io, cloudflare, etc.)
+ *   1. Pinata gateway (if configured)
+ *   2. Public gateways (ipfs.io, cloudflare, etc.)
  */
 export async function downloadFromIpfs(cidString: string): Promise<Uint8Array> {
-  // 1. Try local Helia node first
-  try {
-    await initIpfs();
-    const { CID } = await import('multiformats/cid');
-    const cid = CID.parse(cidString);
-
-    // Check if we have the block locally
-    const has = await heliaInstance!.blockstore.has(cid);
-    if (has) {
-      return await streamCat(cid);
-    }
-  } catch {
-    // Block not in local store — fall through to gateway
-  }
-
-  // 2. Try HTTP gateways in order
   const errors: string[] = [];
+  
   for (const gateway of PUBLIC_GATEWAYS) {
     try {
       const url = `${gateway}/${cidString}`;
       const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
       if (res.ok) {
         const buf = await res.arrayBuffer();
-        const bytes = new Uint8Array(buf);
-
-        // Store in local Helia so future requests are instant
-        try {
-          await initIpfs();
-          const { CID } = await import('multiformats/cid');
-          const cid = CID.parse(cidString);
-          await fsInstance!.addBytes(bytes);
-        } catch {
-          // Best-effort caching
-        }
-
-        return bytes;
+        return new Uint8Array(buf);
       }
       errors.push(`${gateway}: HTTP ${res.status}`);
     } catch (err: any) {
@@ -179,24 +92,6 @@ export async function downloadFromIpfs(cidString: string): Promise<Uint8Array> {
   }
 
   throw new Error(`Failed to fetch CID ${cidString} from all gateways:\n${errors.join('\n')}`);
-}
-
-/**
- * Stream cat from local Helia node.
- */
-async function streamCat(cid: any): Promise<Uint8Array> {
-  const chunks: Uint8Array[] = [];
-  for await (const chunk of fsInstance!.cat(cid)) {
-    chunks.push(chunk);
-  }
-  const totalLength = chunks.reduce((acc, c) => acc + c.length, 0);
-  const result = new Uint8Array(totalLength);
-  let offset = 0;
-  for (const chunk of chunks) {
-    result.set(chunk, offset);
-    offset += chunk.length;
-  }
-  return result;
 }
 
 /**
