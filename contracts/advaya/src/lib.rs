@@ -18,7 +18,7 @@
 
 use soroban_sdk::{
     contract, contractimpl, contracttype,
-    log, symbol_short,
+    log, symbol_short, token,
     Address, Bytes, Env, Map, String, Vec,
 };
 
@@ -57,6 +57,7 @@ pub struct ConversationRecord {
 
 #[contracttype]
 pub enum DataKey {
+    Admin,
     Wallet(Address),
     Conversation(String), // key = deterministic conversationId string
 }
@@ -68,6 +69,14 @@ pub struct AdvayaContract;
 
 #[contractimpl]
 impl AdvayaContract {
+
+    /// Initialize the contract with an admin (treasury) address to receive fees.
+    pub fn init(env: Env, admin: Address) {
+        if env.storage().persistent().has(&DataKey::Admin) {
+            panic!("Already initialized");
+        }
+        env.storage().persistent().set(&DataKey::Admin, &admin);
+    }
 
     // ─── Wallet ──────────────────────────────────────────────────────────
 
@@ -117,8 +126,17 @@ impl AdvayaContract {
         sender: Address,
         receiver: Address,
         request_note: String,
+        token: Address,
     ) {
         sender.require_auth();
+
+        // 1. Enforce 1 XLM fee
+        let admin: Address = env.storage().persistent().get(&DataKey::Admin).unwrap_or_else(|| panic!("Admin not set"));
+        let token_client = token::Client::new(&env, &token);
+        // 1 XLM = 10,000,000 stroops
+        let fee_amount: i128 = 10_000_000;
+        
+        token_client.transfer(&sender, &admin, &fee_amount);
 
         let key = DataKey::Conversation(conv_id.clone());
 
