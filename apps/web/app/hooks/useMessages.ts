@@ -113,11 +113,21 @@ export function useMessages(
       const history = await queryMessageHistory(conversationId);
       const mapped = history.map(wakuMsgToMessage);
 
-      // Filter out expired messages
+      // Filter out expired messages and deleted messages
       const now = Date.now();
-      const valid = mapped.filter(m =>
-        !m.expires_at || new Date(m.expires_at).getTime() > now
-      );
+      let deletedIds: string[] = [];
+      if (typeof window !== 'undefined') {
+        try {
+          const stored = localStorage.getItem('advaya_deleted_msgs');
+          if (stored) deletedIds = JSON.parse(stored);
+        } catch(e) {}
+      }
+
+      const valid = mapped.filter(m => {
+        if (m.expires_at && new Date(m.expires_at).getTime() <= now) return false;
+        if (deletedIds.includes(m.id)) return false;
+        return true;
+      });
 
       if (mountedRef.current) {
         setMessages(prev => {
@@ -224,11 +234,32 @@ export function useMessages(
     });
   }, []);
 
+  const deleteMessage = useCallback((messageId: string) => {
+    setMessages(prev => {
+      const next = prev.filter(m => m.id !== messageId);
+      // We must immediately save here so the local cache is updated
+      if (conversationId) saveLocalMessages(conversationId, next);
+      return next;
+    });
+    
+    // Also store the deleted ID in local storage so fetchMessages can ignore it later
+    if (typeof window !== 'undefined') {
+      try {
+        const deletedKey = 'advaya_deleted_msgs';
+        const deletedStr = localStorage.getItem(deletedKey);
+        const deletedArr = deletedStr ? JSON.parse(deletedStr) : [];
+        deletedArr.push(messageId);
+        localStorage.setItem(deletedKey, JSON.stringify(deletedArr));
+      } catch (err) {}
+    }
+  }, [conversationId]);
+
   return {
     messages,
     loading,
     error,
     refetch: fetchMessages,
     appendMessage,
+    deleteMessage,
   };
 }

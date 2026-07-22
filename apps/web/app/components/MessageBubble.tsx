@@ -9,6 +9,7 @@ interface MessageBubbleProps {
   message: Message;
   senderPubKey: string;  // public key of the other party
   isConsecutive?: boolean;
+  onDelete?: () => void;
 }
 
 function formatTime(dateStr: string): string {
@@ -381,6 +382,15 @@ export function MessageBubble({ message, senderPubKey, isConsecutive }: MessageB
           {message.expires_at && (
             <span className="expiry-badge">⏱ {timeUntilExpiry(message.expires_at)}</span>
           )}
+          {onDelete && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              className="delete-msg-btn"
+              title="Delete message"
+            >
+              🗑️
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -433,9 +443,10 @@ interface SentMessageBubbleProps {
   expiresAt?: string | null;
   messageType?: 'text' | 'file' | 'image';
   fileInfo?: { fileId: string; fileName: string; fileSize: number; fileNonce: string };
+  onDelete?: () => void;
 }
 
-export function SentMessageBubble({ plaintext, sentAt, readOnce, expiresAt, messageType, fileInfo }: SentMessageBubbleProps) {
+export function SentMessageBubble({ plaintext, sentAt, readOnce, expiresAt, messageType, fileInfo, onDelete }: SentMessageBubbleProps) {
   const { walletAddress, keyPair } = useAuth();
 
   // For sent file/image messages, we have the file info directly
@@ -523,6 +534,15 @@ export function SentMessageBubble({ plaintext, sentAt, readOnce, expiresAt, mess
           <span className="bubble-time">{formatTime(sentAt)}</span>
           {readOnce && <span className="read-once-badge">👁 Once</span>}
           {expiresAt && <span className="expiry-badge">⏱ {timeUntilExpiry(expiresAt)}</span>}
+          {onDelete && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              className="delete-msg-btn"
+              title="Delete message"
+            >
+              🗑️
+            </button>
+          )}
         </div>
       </div>
     </div>

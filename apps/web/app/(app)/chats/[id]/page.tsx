@@ -43,7 +43,7 @@ export default function ChatRoomPage() {
   // conversationId is now a string (deterministic "<addrA>:<addrB>")
   const conversationId = params?.id ? decodeURIComponent(params.id as string) : null;
   const { walletAddress, keyPair } = useAuth();
-  const { messages, loading, appendMessage } = useMessages(conversationId, walletAddress);
+  const { messages, loading, appendMessage, deleteMessage } = useMessages(conversationId, walletAddress);
   const { subscribeToSystemEvents, isReady: wakuReady } = useWaku(walletAddress);
 
   const [conversation, setConversation] = useState<Conversation | null>(null);
@@ -293,6 +293,7 @@ export default function ChatRoomPage() {
                       expiresAt={sent.expiresAt}
                       messageType={sent.messageType}
                       fileInfo={sent.fileInfo}
+                      onDelete={() => deleteMessage(msg.id)}
                     />
                   );
                 }
@@ -304,6 +305,7 @@ export default function ChatRoomPage() {
                   message={msg}
                   senderPubKey={otherPubKey}
                   isConsecutive={!!isConsecutive}
+                  onDelete={() => deleteMessage(msg.id)}
                 />
               );
             })}
