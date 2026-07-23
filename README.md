@@ -9,11 +9,11 @@ https://advaya-teal.vercel.app/
 **PPT Link** - https://docs.google.com/presentation/d/1CeqTNQdsSkp4zdDloj0z5yNV6KJjb7J6OY8datrCyeo/edit?usp=sharing
 
 🎥 **Video Demo**
-[Advaya_Product_Demo_Level5.mp4](#)
+https://github.com/user-attachments/assets/6a53722c-b6ca-40d3-ad13-ed1326859711
 
 ---
 
-## 👥 Level 6: Production Scaling (50+ Verified Active Users)
+## 👥 Production Scaling (50+ Verified Active Users)
 As part of the final production readiness phase, we have scaled the platform and successfully validated it with over 53 testnet users.
 
 ### Table 1: Verified User Addresses
@@ -190,16 +190,6 @@ npm run dev
 ```
 
 ---
-
-## ✅ Submission Checklist
-- [x] Public GitHub repository
-- [x] Minimum 20+ meaningful commits
-- [x] Live deployed application (Vercel)
-- [x] PPT/Pitch deck link (In Submission Portal)
-- [x] Demo video link (In Submission Portal)
-- [x] Proof of 35+ users
-- [x] Updated README and documentation
-- [x] User feedback iteration summary
 
 ## 📄 License
 This project is licensed under the MIT License.
