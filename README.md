@@ -78,7 +78,8 @@ As part of the final production readiness phase, we have scaled the platform and
 <img width="1918" height="902" alt="image" src="https://github.com/user-attachments/assets/b7261539-f43f-49f8-8684-b67a3f6f2b28" />
 <img width="1917" height="906" alt="image" src="https://github.com/user-attachments/assets/c9033f12-9d90-47ac-9d99-735982317c96" />
 <img width="327" height="668" alt="image" src="https://github.com/user-attachments/assets/d7a1b84b-75a2-493a-9d2e-d3010fe0b3ac" />
-
+## Analytical Setup
+<img width="1918" height="448" alt="image" src="https://github.com/user-attachments/assets/e1bbba24-5b06-4a80-8bb7-e359d8c99a7a" />
 
 ## 📊 Feedback Documentation & Implementation
  https://docs.google.com/spreadsheets/d/1_pKxlbvwxl-kF6Dbq0Neh2Zljwnv0Wt5zZTpDjfqKNc/edit?usp=sharing
