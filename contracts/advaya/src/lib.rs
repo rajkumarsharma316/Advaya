@@ -60,6 +60,7 @@ pub enum DataKey {
     Admin,
     Wallet(Address),
     Conversation(String), // key = deterministic conversationId string
+    UserConversations(Address), // Maps a wallet to a list of its conversation IDs
 }
 
 // ─── Contract ─────────────────────────────────────────────────────────────────
@@ -145,6 +146,17 @@ impl AdvayaContract {
             panic!("Conversation already exists");
         }
 
+        // Add to both sender and receiver's UserConversations index
+        for user in [&sender, &receiver] {
+            let user_convs_key = DataKey::UserConversations(user.clone());
+            let mut convs: Vec<String> = env.storage().persistent().get(&user_convs_key).unwrap_or_else(|| Vec::new(&env));
+            // Only add if not already present to be safe
+            if !convs.contains(conv_id.clone()) {
+                convs.push_back(conv_id.clone());
+                env.storage().persistent().set(&user_convs_key, &convs);
+            }
+        }
+
         let record = ConversationRecord {
             sender: sender.clone(),
             receiver: receiver.clone(),
@@ -218,4 +230,11 @@ impl AdvayaContract {
         let key = DataKey::Conversation(conv_id);
         env.storage().persistent().get(&key)
     }
+
+    /// Read the list of conversation IDs for a specific user.
+    pub fn get_user_conversations(env: Env, address: Address) -> Vec<String> {
+        let key = DataKey::UserConversations(address);
+        env.storage().persistent().get(&key).unwrap_or_else(|| Vec::new(&env))
+    }
+
 }

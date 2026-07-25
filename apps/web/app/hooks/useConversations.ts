@@ -20,6 +20,8 @@ import {
   receiveConversationUpdate,
   deleteConversation as deleteConversationLocal,
   cacheWallet,
+  getUserConversationsOnChain,
+  getConversationOnChain,
   type Conversation,
   type ConversationStatus,
 } from '../lib/stellar';
@@ -113,6 +115,26 @@ export function useConversations(walletAddress: string | null) {
     try {
       const convos = await getConversations(walletAddress);
       if (mountedRef.current) setConversations(convos);
+
+      // --- Background Sync with Soroban Contract ---
+      getUserConversationsOnChain(walletAddress).then(async (onChainIds) => {
+        let changed = false;
+        for (const id of onChainIds) {
+          if (!convos.find(c => c.id === id || String(c.id) === String(id))) {
+            console.info(`[Sync] Found missing conversation ${id} on-chain, restoring...`);
+            const record = await getConversationOnChain(id);
+            if (record) {
+              receiveConversationRequest(record);
+              changed = true;
+            }
+          }
+        }
+        if (changed && mountedRef.current) {
+          const syncedConvos = await getConversations(walletAddress);
+          setConversations(syncedConvos);
+        }
+      }).catch(err => console.warn('[Sync] On-chain sync failed:', err));
+      
     } catch (err: any) {
       if (mountedRef.current) setError(err.message);
     } finally {

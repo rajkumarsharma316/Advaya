@@ -377,3 +377,74 @@ export function cacheWallet(record: WalletRecord): void {
   cache[record.address] = record;
   saveWalletCache(cache);
 }
+
+// ─── On-Chain Data Fetching ──────────────────────────────────────────────────
+
+export async function getUserConversationsOnChain(walletAddress: string): Promise<string[]> {
+  if (!CONTRACT_ID) return [];
+  try {
+    const { rpc, Contract, nativeToScVal, scValToNative, Networks, TransactionBuilder, Account } = await import('@stellar/stellar-sdk');
+    const server = new rpc.Server('https://soroban-testnet.stellar.org');
+    const contract = new Contract(CONTRACT_ID);
+    const tx = new TransactionBuilder(new Account(walletAddress, "0"), { fee: "100", networkPassphrase: Networks.TESTNET })
+      .addOperation(contract.call("get_user_conversations", nativeToScVal(walletAddress, { type: 'address' })))
+      .setTimeout(30).build();
+      
+    const res = await server.simulateTransaction(tx);
+    if (res && (res as any).result && (res as any).result.retval) {
+      const data = scValToNative((res as any).result.retval);
+      return Array.isArray(data) ? data : [];
+    }
+  } catch (err) {
+    console.error('[Stellar] getUserConversationsOnChain error:', err);
+  }
+  return [];
+}
+
+export async function getConversationOnChain(id: string): Promise<Conversation | null> {
+  if (!CONTRACT_ID) return null;
+  try {
+    const { rpc, Contract, nativeToScVal, scValToNative, Networks, TransactionBuilder, Account } = await import('@stellar/stellar-sdk');
+    const server = new rpc.Server('https://soroban-testnet.stellar.org');
+    const contract = new Contract(CONTRACT_ID);
+    
+    // Dummy account for simulation
+    const tx = new TransactionBuilder(new Account("GDTWHQ2P5TAMNCAHLHVNRVHVQLEECRF6AGP2PVU5QHWSKK6BMEVMURCR", "0"), { fee: "100", networkPassphrase: Networks.TESTNET })
+      .addOperation(contract.call("get_conversation", nativeToScVal(id, { type: 'string' })))
+      .setTimeout(30).build();
+      
+    const res = await server.simulateTransaction(tx);
+    if (res && (res as any).result && (res as any).result.retval) {
+      const record = scValToNative((res as any).result.retval);
+      if (record && typeof record === 'object') {
+         // In rust: pub enum ConversationStatus { Pending, Approved, Rejected }
+         // Depending on how it's serialized, it could be an object or string
+         let status: ConversationStatus = 'pending';
+         if (record.status) {
+           const s = String(record.status).toLowerCase();
+           if (s.includes('approve') || s === '1') status = 'approved';
+           if (s.includes('reject') || s === '2') status = 'rejected';
+         }
+         
+         return {
+            id,
+            sender: record.sender,
+            receiver: record.receiver,
+            status,
+            request_note: record.request_note || null,
+            created_at: new Date(Number(record.created_at) * 1000).toISOString(),
+            updated_at: new Date(Number(record.updated_at) * 1000).toISOString(),
+            sender_pub_key: '', 
+            sender_name: null,
+            receiver_pub_key: '',
+            receiver_name: null,
+            message_count: '0',
+            last_message_at: null,
+         };
+      }
+    }
+  } catch (err) {
+    console.error('[Stellar] getConversationOnChain error:', err);
+  }
+  return null;
+}
