@@ -159,7 +159,7 @@ async function callContract(
     const signedTx = TransactionBuilder.fromXDR(signedTxXdr, Networks.TESTNET);
     
     // 4. Submit to Soroban RPC
-    const response = await server.submitTransaction(signedTx as any);
+    const response = await server.sendTransaction(signedTx as any);
     console.log(`[Stellar] Transaction submitted for ${_methodName}:`, response.hash);
     return response.hash;
   } catch (err) {
