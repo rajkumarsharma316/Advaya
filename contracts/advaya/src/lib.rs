@@ -127,17 +127,8 @@ impl AdvayaContract {
         sender: Address,
         receiver: Address,
         request_note: String,
-        token: Address,
     ) {
         sender.require_auth();
-
-        // 1. Enforce 1 XLM fee
-        let admin: Address = env.storage().persistent().get(&DataKey::Admin).unwrap_or_else(|| panic!("Admin not set"));
-        let token_client = token::Client::new(&env, &token);
-        // 1 XLM = 10,000,000 stroops
-        let fee_amount: i128 = 10_000_000;
-        
-        token_client.transfer(&sender, &admin, &fee_amount);
 
         let key = DataKey::Conversation(conv_id.clone());
 

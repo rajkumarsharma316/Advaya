@@ -125,15 +125,47 @@ async function callContract(
   _methodName: string,
   _args: any[],
   _sourceAddress: string
-): Promise<null> {
-  // Soroban contract calls are intentionally async/optional.
-  // Full implementation requires @stellar/stellar-sdk which is a Node.js package.
-  // For browser use, integrate via a server-side proxy or use Freighter's
-  // signTransaction + fetch to the Soroban RPC directly.
-  // TODO: Integrate when @stellar/stellar-sdk browser bundle is available.
+): Promise<any> {
   if (!CONTRACT_ID) return null;
-  console.info(`[Stellar] Contract call: ${_methodName} (fire-and-forget, requires browser bundle)`);
-  return null;
+  console.info(`[Stellar] Contract call: ${_methodName}`);
+  
+  try {
+    const { rpc, Contract, nativeToScVal, Networks, TransactionBuilder, Account, xdr } = await import('@stellar/stellar-sdk');
+    const { signTransaction } = await import('@stellar/freighter-api');
+    const server = new rpc.Server('https://soroban-testnet.stellar.org');
+    
+    // Auto-detect if argument is a Stellar Address (G...) or a string
+    const scVals = _args.map(arg => {
+      if (typeof arg === 'string' && arg.startsWith('G') && arg.length === 56) {
+        return nativeToScVal(arg, { type: 'address' });
+      }
+      return nativeToScVal(arg, { type: 'string' });
+    });
+    
+    const contract = new Contract(CONTRACT_ID);
+    const account = await server.getAccount(_sourceAddress);
+    
+    // 1. Build the transaction
+    const tx = new TransactionBuilder(account, { fee: "1000", networkPassphrase: Networks.TESTNET })
+      .addOperation(contract.call(_methodName, ...scVals))
+      .setTimeout(30)
+      .build();
+      
+    // 2. Prepare transaction for Soroban
+    const preparedTx = await server.prepareTransaction(tx);
+    
+    // 3. Sign with Freighter
+    const { signedTxXdr } = await signTransaction(preparedTx.toXDR(), { networkPassphrase: Networks.TESTNET });
+    const signedTx = TransactionBuilder.fromXDR(signedTxXdr, Networks.TESTNET);
+    
+    // 4. Submit to Soroban RPC
+    const response = await server.submitTransaction(signedTx as any);
+    console.log(`[Stellar] Transaction submitted for ${_methodName}:`, response.hash);
+    return response.hash;
+  } catch (err) {
+    console.error(`[Stellar] Error calling contract ${_methodName}:`, err);
+    throw err;
+  }
 }
 
 // ─── Wallet API ──────────────────────────────────────────────────────────────
@@ -226,7 +258,7 @@ export async function createConversation(
   saveConversations(convos);
 
   // Fire-and-forget on-chain
-  callContract('create_conversation', [senderAddress, receiverAddress, requestNote || ''], senderAddress)
+  callContract('create_conversation', [id, senderAddress, receiverAddress, requestNote || ''], senderAddress)
     .catch(err => console.warn('[Stellar] create_conversation on-chain failed:', err));
 
   return convo;
