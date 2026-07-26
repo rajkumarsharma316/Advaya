@@ -453,9 +453,9 @@ export async function getConversationOnChain(id: string): Promise<Conversation |
          // Depending on how it's serialized, it could be an object or string
          let status: ConversationStatus = 'pending';
          if (record.status) {
-           const s = String(record.status).toLowerCase();
-           if (s.includes('approve') || s === '1') status = 'approved';
-           if (s.includes('reject') || s === '2') status = 'rejected';
+           const s = JSON.stringify(record.status).toLowerCase();
+           if (s.includes('approve') || s.includes('1')) status = 'approved';
+           if (s.includes('reject') || s.includes('2')) status = 'rejected';
          }
          
          return {

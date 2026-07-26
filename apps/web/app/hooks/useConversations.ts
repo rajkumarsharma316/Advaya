@@ -22,6 +22,7 @@ import {
   cacheWallet,
   getUserConversationsOnChain,
   getConversationOnChain,
+  updateConversationMeta,
   type Conversation,
   type ConversationStatus,
 } from '../lib/stellar';
@@ -120,11 +121,20 @@ export function useConversations(walletAddress: string | null) {
       getUserConversationsOnChain(walletAddress).then(async (onChainIds) => {
         let changed = false;
         for (const id of onChainIds) {
-          if (!convos.find(c => c.id === id || String(c.id) === String(id))) {
+          const existing = convos.find(c => c.id === id || String(c.id) === String(id));
+          if (!existing) {
             console.info(`[Sync] Found missing conversation ${id} on-chain, restoring...`);
             const record = await getConversationOnChain(id);
             if (record) {
               receiveConversationRequest(record);
+              changed = true;
+            }
+          } else {
+            // Compare status and sync if different
+            const record = await getConversationOnChain(id);
+            if (record && record.status !== existing.status) {
+              console.info(`[Sync] Updating status for ${id} from ${existing.status} to ${record.status}`);
+              updateConversationMeta(id, { status: record.status });
               changed = true;
             }
           }
