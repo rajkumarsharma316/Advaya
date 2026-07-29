@@ -1,0 +1,85 @@
+name: Soroban Smart Contract CI/CD
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'contracts/advaya/**'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'contracts/advaya/**'
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install Stellar CLI
+        run: cargo install --locked stellar-cli@22.0.0 --features opt
+
+      - name: Build Smart Contract
+        working-directory: contracts/advaya
+        run: cargo build --target wasm32-unknown-unknown --release
+
+      - name: Optimize Smart Contract
+        working-directory: contracts/advaya
+        run: stellar contract build --optimize
+
+      - name: Run Tests
+        working-directory: contracts/advaya
+        run: cargo test
+
+  deploy:
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install Stellar CLI
+        run: cargo install --locked stellar-cli@22.0.0 --features opt
+
+      - name: Build & Optimize Smart Contract
+        working-directory: contracts/advaya
+        run: |
+          cargo build --target wasm32-unknown-unknown --release
+          stellar contract build --optimize
+
+      - name: Deploy to Stellar Testnet
+        working-directory: contracts/advaya
+        env:
+          STELLAR_SECRET_KEY: ${{ secrets.STELLAR_SECRET_KEY }}
+        run: |
+          if [ -z "$STELLAR_SECRET_KEY" ]; then
+            echo "Error: STELLAR_SECRET_KEY is not set in GitHub Secrets."
+            echo "Please add it in your repository settings: Settings -> Secrets and variables -> Actions"
+            exit 1
+          fi
+          
+          echo "Deploying optimized WASM to Testnet..."
+          stellar contract deploy \
+            --wasm target/wasm32-unknown-unknown/release/advaya.optimized.wasm \
+            --source "$STELLAR_SECRET_KEY" \
+            --network testnet > deploy_output.txt
+          
+          CONTRACT_ID=$(cat deploy_output.txt)
+          echo "✅ Deployment Successful!"
+          echo "New Contract ID: $CONTRACT_ID"
+          echo ""
+          echo "Note: You must manually update NEXT_PUBLIC_SOROBAN_CONTRACT_ID in your frontend environment variables."
