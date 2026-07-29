@@ -47,7 +47,8 @@ jobs:
         run: |
           wget https://github.com/stellar/stellar-cli/releases/download/v22.0.0/stellar-cli-22.0.0-x86_64-unknown-linux-gnu.tar.gz
           tar -xvzf stellar-cli-22.0.0-x86_64-unknown-linux-gnu.tar.gz
-          sudo mv stellar-cli-22.0.0-x86_64-unknown-linux-gnu/stellar /usr/local/bin/
+          sudo mv $(find . -name 'stellar' -type f | head -1) /usr/local/bin/
+          stellar --version
 
       - name: Build Smart Contract (WASM)
         working-directory: contracts/advaya
@@ -82,7 +83,8 @@ jobs:
         run: |
           wget https://github.com/stellar/stellar-cli/releases/download/v22.0.0/stellar-cli-22.0.0-x86_64-unknown-linux-gnu.tar.gz
           tar -xvzf stellar-cli-22.0.0-x86_64-unknown-linux-gnu.tar.gz
-          sudo mv stellar-cli-22.0.0-x86_64-unknown-linux-gnu/stellar /usr/local/bin/
+          sudo mv $(find . -name 'stellar' -type f | head -1) /usr/local/bin/
+          stellar --version
 
       - name: Build & Optimize Smart Contract
         working-directory: contracts/advaya
