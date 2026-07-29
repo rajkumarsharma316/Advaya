@@ -45,8 +45,8 @@ jobs:
 
       - name: Install Stellar CLI (Pre-compiled)
         run: |
-          wget https://github.com/stellar/stellar-cli/releases/download/v22.0.0/stellar-cli-22.0.0-x86_64-unknown-linux-gnu.tar.gz
-          tar -xvzf stellar-cli-22.0.0-x86_64-unknown-linux-gnu.tar.gz
+          wget https://github.com/stellar/stellar-cli/releases/download/v27.0.0/stellar-cli-27.0.0-x86_64-unknown-linux-gnu.tar.gz
+          tar -xvzf stellar-cli-27.0.0-x86_64-unknown-linux-gnu.tar.gz
           sudo mv $(find . -name 'stellar' -type f | head -1) /usr/local/bin/
           stellar --version
 
@@ -77,8 +77,8 @@ jobs:
 
       - name: Install Stellar CLI (Pre-compiled)
         run: |
-          wget https://github.com/stellar/stellar-cli/releases/download/v22.0.0/stellar-cli-22.0.0-x86_64-unknown-linux-gnu.tar.gz
-          tar -xvzf stellar-cli-22.0.0-x86_64-unknown-linux-gnu.tar.gz
+          wget https://github.com/stellar/stellar-cli/releases/download/v27.0.0/stellar-cli-27.0.0-x86_64-unknown-linux-gnu.tar.gz
+          tar -xvzf stellar-cli-27.0.0-x86_64-unknown-linux-gnu.tar.gz
           sudo mv $(find . -name 'stellar' -type f | head -1) /usr/local/bin/
           stellar --version
 
