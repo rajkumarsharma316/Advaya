@@ -6,6 +6,9 @@ Advaya is a next-generation decentralized application (dApp) that provides fully
 🔗 **Live App**
 https://advaya-teal.vercel.app/
 
+📜 **Deployed Smart Contract (Soroban Testnet)**
+`CCFUKPWLB75EIJMJDMBB4GSJT5WEZUL2QBYQQ3JOYHKVZF2DC5XPXWBQ`
+
 **PPT Link** - https://docs.google.com/presentation/d/1CeqTNQdsSkp4zdDloj0z5yNV6KJjb7J6OY8datrCyeo/edit?usp=sharing
 
 🎥 **Video Demo**
