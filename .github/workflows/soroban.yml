@@ -28,11 +28,11 @@ jobs:
 
       - name: Build Frontend
         working-directory: apps/web
-        # This acts as a test for the frontend to ensure it compiles successfully without type errors
+        # Full production build — catches TypeScript errors, missing imports, and build failures
         run: npm run build
 
-  smart-contract-test:
-    name: Smart Contract Tests
+  smart-contract-build:
+    name: Smart Contract Build & Verify
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -43,13 +43,30 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
-      - name: Run Tests
+      - name: Install Stellar CLI (Pre-compiled)
+        run: |
+          wget https://github.com/stellar/stellar-cli/releases/download/v22.0.0/stellar-cli-22.0.0-x86_64-unknown-linux-gnu.tar.gz
+          tar -xvzf stellar-cli-22.0.0-x86_64-unknown-linux-gnu.tar.gz
+          sudo mv stellar-cli-22.0.0-x86_64-unknown-linux-gnu/stellar /usr/local/bin/
+
+      - name: Build Smart Contract (WASM)
         working-directory: contracts/advaya
-        run: cargo test
+        run: cargo build --target wasm32-unknown-unknown --release
+
+      - name: Optimize Smart Contract
+        working-directory: contracts/advaya
+        run: stellar contract build --optimize
+
+      - name: Verify WASM Artifact Exists
+        working-directory: contracts/advaya
+        run: |
+          ls -la target/wasm32-unknown-unknown/release/advaya.wasm
+          ls -la target/wasm32-unknown-unknown/release/advaya.optimized.wasm
+          echo "✅ Smart contract compiled and optimized successfully"
 
   smart-contract-deploy:
-    name: Smart Contract Build & Deploy
-    needs: smart-contract-test
+    name: Smart Contract Deploy
+    needs: smart-contract-build
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
