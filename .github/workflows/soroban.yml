@@ -56,7 +56,7 @@ jobs:
 
       - name: Optimize Smart Contract
         working-directory: contracts/advaya
-        run: stellar contract build --optimize
+        run: stellar contract optimize --wasm target/wasm32-unknown-unknown/release/advaya.wasm
 
       - name: Verify WASM Artifact Exists
         working-directory: contracts/advaya
@@ -90,7 +90,7 @@ jobs:
         working-directory: contracts/advaya
         run: |
           cargo build --target wasm32-unknown-unknown --release
-          stellar contract build --optimize
+          stellar contract optimize --wasm target/wasm32-unknown-unknown/release/advaya.wasm
 
       - name: Deploy to Stellar Testnet
         working-directory: contracts/advaya
