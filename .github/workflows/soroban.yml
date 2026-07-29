@@ -1,4 +1,4 @@
-name: Soroban Smart Contract CI/CD
+name: CI/CD Pipeline (Frontend & Smart Contract)
 
 on:
   push:
@@ -10,7 +10,29 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-and-test:
+  frontend-build-and-test:
+    name: Frontend Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Frontend Dependencies
+        working-directory: apps/web
+        run: npm ci
+
+      - name: Build Frontend
+        working-directory: apps/web
+        # This acts as a test for the frontend to ensure it compiles successfully without type errors
+        run: npm run build
+
+  smart-contract-test:
+    name: Smart Contract Tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -20,25 +42,15 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
-
-      - name: Install Stellar CLI
-        run: cargo install --locked stellar-cli@22.0.0 --features opt
-
-      - name: Build Smart Contract
-        working-directory: contracts/advaya
-        run: cargo build --target wasm32-unknown-unknown --release
-
-      - name: Optimize Smart Contract
-        working-directory: contracts/advaya
-        run: stellar contract build --optimize
 
       - name: Run Tests
         working-directory: contracts/advaya
         run: cargo test
 
-  deploy:
-    needs: build-and-test
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+  smart-contract-deploy:
+    name: Smart Contract Build & Deploy
+    needs: smart-contract-test
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -49,8 +61,11 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
-      - name: Install Stellar CLI
-        run: cargo install --locked stellar-cli@22.0.0 --features opt
+      - name: Install Stellar CLI (Pre-compiled)
+        run: |
+          wget https://github.com/stellar/stellar-cli/releases/download/v22.0.0/stellar-cli-22.0.0-x86_64-unknown-linux-gnu.tar.gz
+          tar -xvzf stellar-cli-22.0.0-x86_64-unknown-linux-gnu.tar.gz
+          sudo mv stellar-cli-22.0.0-x86_64-unknown-linux-gnu/stellar /usr/local/bin/
 
       - name: Build & Optimize Smart Contract
         working-directory: contracts/advaya
