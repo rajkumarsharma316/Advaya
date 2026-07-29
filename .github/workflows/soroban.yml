@@ -28,7 +28,6 @@ jobs:
 
       - name: Build Frontend
         working-directory: apps/web
-        # Full production build — catches TypeScript errors, missing imports, and build failures
         run: npm run build
 
   smart-contract-build:
@@ -41,24 +40,28 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: wasm32-unknown-unknown,wasm32v1-none
+          targets: wasm32-unknown-unknown
 
-      - name: Install Stellar CLI (Pre-compiled)
+      - name: Install Stellar CLI
         run: |
-          wget https://github.com/stellar/stellar-cli/releases/download/v27.0.0/stellar-cli-27.0.0-x86_64-unknown-linux-gnu.tar.gz
-          tar -xvzf stellar-cli-27.0.0-x86_64-unknown-linux-gnu.tar.gz
+          wget -q https://github.com/stellar/stellar-cli/releases/download/v27.0.0/stellar-cli-27.0.0-x86_64-unknown-linux-gnu.tar.gz
+          tar -xzf stellar-cli-27.0.0-x86_64-unknown-linux-gnu.tar.gz
           sudo mv $(find . -name 'stellar' -type f | head -1) /usr/local/bin/
           stellar --version
 
-      - name: Build & Optimize Smart Contract
+      - name: Build Smart Contract
         working-directory: contracts/advaya
-        # Use 'stellar contract build' which automatically sets correct WASM flags (no bulk-memory, etc.)
-        run: stellar contract build
+        run: cargo build --target wasm32-unknown-unknown --release
 
-      - name: Verify WASM Artifact Exists
+      - name: Optimize Smart Contract
+        working-directory: contracts/advaya
+        run: stellar contract optimize --wasm target/wasm32-unknown-unknown/release/advaya.wasm
+
+      - name: Verify Artifacts
         working-directory: contracts/advaya
         run: |
-          ls -la target/wasm32-unknown-unknown/release/*.wasm
+          ls -la target/wasm32-unknown-unknown/release/advaya.wasm
+          ls -la target/wasm32-unknown-unknown/release/advaya.optimized.wasm
           echo "✅ Smart contract compiled and optimized successfully"
 
   smart-contract-deploy:
@@ -73,18 +76,20 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: wasm32-unknown-unknown,wasm32v1-none
+          targets: wasm32-unknown-unknown
 
-      - name: Install Stellar CLI (Pre-compiled)
+      - name: Install Stellar CLI
         run: |
-          wget https://github.com/stellar/stellar-cli/releases/download/v27.0.0/stellar-cli-27.0.0-x86_64-unknown-linux-gnu.tar.gz
-          tar -xvzf stellar-cli-27.0.0-x86_64-unknown-linux-gnu.tar.gz
+          wget -q https://github.com/stellar/stellar-cli/releases/download/v27.0.0/stellar-cli-27.0.0-x86_64-unknown-linux-gnu.tar.gz
+          tar -xzf stellar-cli-27.0.0-x86_64-unknown-linux-gnu.tar.gz
           sudo mv $(find . -name 'stellar' -type f | head -1) /usr/local/bin/
           stellar --version
 
-      - name: Build & Optimize Smart Contract
+      - name: Build & Optimize
         working-directory: contracts/advaya
-        run: stellar contract build
+        run: |
+          cargo build --target wasm32-unknown-unknown --release
+          stellar contract optimize --wasm target/wasm32-unknown-unknown/release/advaya.wasm
 
       - name: Deploy to Stellar Testnet
         working-directory: contracts/advaya
@@ -97,15 +102,12 @@ jobs:
             exit 1
           fi
           
-          WASM_FILE=$(find target/wasm32-unknown-unknown/release -name '*.wasm' | head -1)
-          echo "Deploying $WASM_FILE to Testnet..."
+          echo "Deploying to Testnet..."
           stellar contract deploy \
-            --wasm "$WASM_FILE" \
+            --wasm target/wasm32-unknown-unknown/release/advaya.optimized.wasm \
             --source "$STELLAR_SECRET_KEY" \
             --network testnet > deploy_output.txt
           
           CONTRACT_ID=$(cat deploy_output.txt)
           echo "✅ Deployment Successful!"
           echo "New Contract ID: $CONTRACT_ID"
-          echo ""
-          echo "Note: You must manually update NEXT_PUBLIC_SOROBAN_CONTRACT_ID in your frontend environment variables."
