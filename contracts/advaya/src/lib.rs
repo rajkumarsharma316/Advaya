@@ -229,3 +229,6 @@ impl AdvayaContract {
     }
 
 }
+
+#[cfg(test)]
+mod test;
