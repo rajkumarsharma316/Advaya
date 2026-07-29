@@ -38,47 +38,9 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Rust (1.81 — last version without default bulk-memory)
-        uses: dtolnay/rust-toolchain@master
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: '1.81.0'
-          targets: wasm32-unknown-unknown
-
-      - name: Install Stellar CLI (Pre-compiled)
-        run: |
-          wget https://github.com/stellar/stellar-cli/releases/download/v22.0.0/stellar-cli-22.0.0-x86_64-unknown-linux-gnu.tar.gz
-          tar -xvzf stellar-cli-22.0.0-x86_64-unknown-linux-gnu.tar.gz
-          sudo mv $(find . -name 'stellar' -type f | head -1) /usr/local/bin/
-          stellar --version
-
-      - name: Build Smart Contract (WASM)
-        working-directory: contracts/advaya
-        run: cargo build --target wasm32-unknown-unknown --release
-
-      - name: Optimize Smart Contract
-        working-directory: contracts/advaya
-        run: stellar contract optimize --wasm target/wasm32-unknown-unknown/release/advaya.wasm
-
-      - name: Verify WASM Artifact Exists
-        working-directory: contracts/advaya
-        run: |
-          ls -la target/wasm32-unknown-unknown/release/advaya.wasm
-          ls -la target/wasm32-unknown-unknown/release/advaya.optimized.wasm
-          echo "✅ Smart contract compiled and optimized successfully"
-
-  smart-contract-deploy:
-    name: Smart Contract Deploy
-    needs: smart-contract-build
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Setup Rust (1.81 — last version without default bulk-memory)
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: '1.81.0'
           targets: wasm32-unknown-unknown
 
       - name: Install Stellar CLI (Pre-compiled)
@@ -90,9 +52,39 @@ jobs:
 
       - name: Build & Optimize Smart Contract
         working-directory: contracts/advaya
+        # Use 'stellar contract build' which automatically sets correct WASM flags (no bulk-memory, etc.)
+        run: stellar contract build
+
+      - name: Verify WASM Artifact Exists
+        working-directory: contracts/advaya
         run: |
-          cargo build --target wasm32-unknown-unknown --release
-          stellar contract optimize --wasm target/wasm32-unknown-unknown/release/advaya.wasm
+          ls -la target/wasm32-unknown-unknown/release/*.wasm
+          echo "✅ Smart contract compiled and optimized successfully"
+
+  smart-contract-deploy:
+    name: Smart Contract Deploy
+    needs: smart-contract-build
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install Stellar CLI (Pre-compiled)
+        run: |
+          wget https://github.com/stellar/stellar-cli/releases/download/v22.0.0/stellar-cli-22.0.0-x86_64-unknown-linux-gnu.tar.gz
+          tar -xvzf stellar-cli-22.0.0-x86_64-unknown-linux-gnu.tar.gz
+          sudo mv $(find . -name 'stellar' -type f | head -1) /usr/local/bin/
+          stellar --version
+
+      - name: Build & Optimize Smart Contract
+        working-directory: contracts/advaya
+        run: stellar contract build
 
       - name: Deploy to Stellar Testnet
         working-directory: contracts/advaya
@@ -105,9 +97,10 @@ jobs:
             exit 1
           fi
           
-          echo "Deploying optimized WASM to Testnet..."
+          WASM_FILE=$(find target/wasm32-unknown-unknown/release -name '*.wasm' | head -1)
+          echo "Deploying $WASM_FILE to Testnet..."
           stellar contract deploy \
-            --wasm target/wasm32-unknown-unknown/release/advaya.optimized.wasm \
+            --wasm "$WASM_FILE" \
             --source "$STELLAR_SECRET_KEY" \
             --network testnet > deploy_output.txt
           
